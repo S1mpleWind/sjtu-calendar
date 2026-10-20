@@ -13,6 +13,19 @@ export interface CanvasDeadline {
   title: string; description: string; dueAt: string; lockAt: string | null; htmlUrl: string;
   workflowState: string | null; submittedAt: string | null; grade: string | null; localCompleted: boolean;
 }
+export interface SjtuConnectionStatus { undergraduateConfigured: boolean; graduateConfigured: boolean }
+export interface SjtuSyncResult { sourceSystem: string; state: string; courseCount: number; meetingCount: number; skippedRows: number; syncedAt: string }
+export interface SjtuCourseOccurrence {
+  occurrenceId: string; courseId: string; termId: string; sourceSystem: string; title: string;
+  teacher: string; location: string; startUtc: string; endUtc: string; timezone: string;
+  color: string; weekNumber: number; weekday: number; startSection: number; endSection: number;
+}
+
+export interface IcsPreview {
+  sourceName: string;
+  eventCount: number;
+  preview: Array<{ title: string; startLocal: string; endLocal: string; location: string }>;
+}
 
 export interface EventDraft {
   title: string;
@@ -114,3 +127,19 @@ export const getCanvasDeadlines = (fromDate: string, toDate: string, displayTime
   invoke<CanvasDeadline[]>("get_canvas_deadlines", { fromDate, toDate, displayTimezone });
 export const setCanvasAssignmentCompleted = (courseId: string, assignmentId: string, completed: boolean) =>
   invoke<void>("set_canvas_assignment_completed", { courseId, assignmentId, completed });
+
+export const getSjtuConnectionStatus = () => invoke<SjtuConnectionStatus>("get_sjtu_connection_status");
+export const startSjtuLogin = (sourceSystem: "undergraduate" | "graduate") =>
+  invoke<void>("start_sjtu_login", { sourceSystem });
+export const finishSjtuLogin = (sourceSystem: "undergraduate" | "graduate") =>
+  invoke<void>("finish_sjtu_login", { sourceSystem });
+export const clearSjtuLogin = (sourceSystem: "undergraduate" | "graduate") =>
+  invoke<void>("clear_sjtu_login", { sourceSystem });
+export const syncSjtu = (sourceSystem: "undergraduate" | "graduate", academicYear: string, termCode: "1" | "2" | "3", startDate: string, weekCount: number) =>
+  invoke<SjtuSyncResult>("sync_sjtu", { sourceSystem, academicYear, termCode, startDate, weekCount });
+export const getSjtuCourseOccurrences = (fromDate: string, toDate: string, displayTimezone: string) =>
+  invoke<SjtuCourseOccurrence[]>("get_sjtu_course_occurrences", { fromDate, toDate, displayTimezone });
+export const previewIcsImport = (content: string, sourceName: string, firstMonday: string, weekCount: number) =>
+  invoke<IcsPreview>("preview_ics_import", { content, sourceName, firstMonday, weekCount });
+export const applyIcsImport = (content: string, sourceName: string, firstMonday: string, weekCount: number, replaceSource: boolean) =>
+  invoke<number>("apply_ics_import", { content, sourceName, firstMonday, weekCount, replaceSource });

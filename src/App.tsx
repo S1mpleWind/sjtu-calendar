@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   createPersonalEvent, deletePersonalEvent, getBackendStatus, getCalendarOccurrences, getCanvasConnectionStatus, getCanvasDeadlines, setCanvasAssignmentCompleted, saveCanvasCredentials, clearCanvasCredentials, testCanvasConnection, syncCanvas,
+  getSjtuConnectionStatus, getSjtuCourseOccurrences, startSjtuLogin, finishSjtuLogin, clearSjtuLogin, syncSjtu,
+  previewIcsImport, applyIcsImport, type IcsPreview,
   getPersonalEvent, listPersonalEvents, setRecurrenceException, updatePersonalEvent,
-  type BackendStatus, type CalendarOccurrence, type EventDraft, type PersonalEvent, type CanvasConnectionStatus, type CanvasDeadline,
+  type BackendStatus, type CalendarOccurrence, type EventDraft, type PersonalEvent, type CanvasConnectionStatus, type CanvasDeadline, type SjtuConnectionStatus, type SjtuCourseOccurrence,
   type RecurrenceOverride,
 } from "./lib/backend";
 import "./App.css";
@@ -88,13 +90,13 @@ function localDateTime(utc: string, timezone: string) {
   const part = (type: string) => parts.find((entry) => entry.type === type)?.value ?? "00";
   return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}:${part("second")}`;
 }
-function layoutOverlaps(items: CalendarOccurrence[]) {
+function layoutOverlaps<T extends { occurrenceId: string; startUtc: string; endUtc: string }>(items: T[]) {
   const sorted = [...items].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
   const layout = new Map<string, { column: number; columns: number }>();
-  let cluster: CalendarOccurrence[] = [];
+  let cluster: T[] = [];
   let clusterEnd = -Infinity;
   const placeCluster = () => {
-    const slots: CalendarOccurrence[][] = [];
+    const slots: T[][] = [];
     for (const item of cluster) {
       const start = Date.parse(item.startUtc);
       const end = Date.parse(item.endUtc);
@@ -127,6 +129,10 @@ function App() {
   const [canvasDeadlines, setCanvasDeadlines] = useState<CanvasDeadline[]>([]);
   const [canvasStatus, setCanvasStatus] = useState<CanvasConnectionStatus>({ configured: false, instanceUrl: null });
   const [canvasNotice, setCanvasNotice] = useState("");
+  const [sjtuOccurrences, setSjtuOccurrences] = useState<SjtuCourseOccurrence[]>([]);
+  const [sjtuStatus, setSjtuStatus] = useState<SjtuConnectionStatus>({ undergraduateConfigured: false, graduateConfigured: false });
+  const [sjtuNotice, setSjtuNotice] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState<SjtuCourseOccurrence | null>(null);
   const [status, setStatus] = useState<BackendStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,14 +166,23 @@ function App() {
     }
     return result;
   }, [canvasDeadlines, timezone]);
+  const coursesByDay = useMemo(() => {
+    const result = new Map<string, SjtuCourseOccurrence[]>();
+    for (const item of sjtuOccurrences) {
+      const date = dateInZone(new Date(item.startUtc), timezone);
+      result.set(date, [...(result.get(date) ?? []), item]);
+    }
+    return result;
+  }, [sjtuOccurrences, timezone]);
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
     setBusy(true);
     setError(null);
     try {
-      const [items, saved, backend, cachedDeadlines, connection] = await Promise.all([
+      const [items, saved, backend, cachedDeadlines, connection, courseItems, academicStatus] = await Promise.all([
         getCalendarOccurrences(range.from, range.to, timezone), listPersonalEvents(), getBackendStatus(),
         getCanvasDeadlines(range.from, range.to, timezone), getCanvasConnectionStatus(),
+        getSjtuCourseOccurrences(range.from, range.to, timezone), getSjtuConnectionStatus(),
       ]);
       if (sequence !== refreshSequence.current) return;
       setOccurrences(items);
@@ -175,6 +190,8 @@ function App() {
       setStatus(backend);
       setCanvasDeadlines(cachedDeadlines);
       setCanvasStatus(connection);
+      setSjtuOccurrences(courseItems);
+      setSjtuStatus(academicStatus);
     } catch (reason) {
       if (sequence === refreshSequence.current) setError(reason instanceof Error ? reason.message : "读取本地日程失败，请检查应用数据库状态。");
     } finally { if (sequence === refreshSequence.current) setBusy(false); }
@@ -256,6 +273,25 @@ function App() {
     setCanvasNotice("已从 Windows Credential Manager 移除 Canvas 凭据。");
     setCanvasDeadlines([]);
   }
+  async function openSjtuLogin(source: "undergraduate" | "graduate") {
+    await startSjtuLogin(source);
+    setSjtuNotice("教务登录窗口已打开。请在其中完成交大统一身份认证，然后回到这里点击“保存登录会话”。");
+  }
+  async function finishSjtuLoginFlow(source: "undergraduate" | "graduate") {
+    await finishSjtuLogin(source);
+    setSjtuStatus(await getSjtuConnectionStatus());
+    setSjtuNotice("登录会话已安全保存。请选择学期信息并刷新课表以验证真实教务响应。");
+  }
+  async function disconnectSjtu(source: "undergraduate" | "graduate") {
+    await clearSjtuLogin(source);
+    setSjtuStatus(await getSjtuConnectionStatus());
+    setSjtuNotice("已从 Windows Credential Manager 移除教务登录会话。离线课表缓存保留。");
+  }
+  async function refreshSjtu(source: "undergraduate" | "graduate", year: string, term: "1" | "2" | "3", firstMonday: string, weeks: number) {
+    const result = await syncSjtu(source, year, term, firstMonday, weeks);
+    setSjtuNotice(`${result.state === "succeeded" ? "课表刷新完成" : "课表部分刷新"}：${result.courseCount} 门课程、${result.meetingCount} 个上课时段${result.skippedRows ? `，跳过 ${result.skippedRows} 条未识别课程` : ""}`);
+    await refresh();
+  }
 
   const miniDays = useMemo(() => Array.from({ length: 42 }, (_, index) => addDays(gridStart(miniMonth), index)), [miniMonth]);
   const selectedMonth = selectedDate.slice(5, 7);
@@ -279,7 +315,7 @@ function App() {
       <div className="side-section-title">日程来源</div>
       <div className="source-row"><span className="source-dot local" />个人日程 <span className="source-count">{events.length}</span></div>
       <div className="source-row"><span className="source-dot canvas" />Canvas <span className="source-state">{canvasStatus.configured ? `${canvasDeadlines.length} 项缓存` : "待连接"}</span></div>
-      <div className="source-row muted"><span className="source-dot sjtu" />SJTU 教务 <span className="source-state">待连接</span></div>
+      <div className="source-row"><span className="source-dot sjtu" />SJTU 教务 <span className="source-state">{sjtuOccurrences.length ? `${sjtuOccurrences.length} 节缓存` : sjtuStatus.undergraduateConfigured || sjtuStatus.graduateConfigured ? "已登录" : "待登录"}</span></div>
       <button className="sidebar-add" onClick={() => openNew()} type="button">＋ 新建日程</button>
       <div className="sidebar-footer"><span className="online-dot" />{status ? `本地 SQLite · v${status.schemaVersion}` : "本地数据"}</div>
     </aside>
@@ -294,15 +330,16 @@ function App() {
         </> : <div className="topbar-spacer" />}
       </header>
 
-      {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /></> : <>
+      {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><IcsImportSettings onImported={refresh} /></> : <>
         <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>{view === "week" ? "每周一开始 · 全天与截止事项单独显示" : "选择日期查看和管理日程"}</p></div><button className="refresh-button" aria-label="刷新日历" onClick={() => void refresh()} disabled={busy} type="button">↻</button></section>
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => void refresh()} type="button">重试</button></div>}
-        {view === "week" ? <WeekView days={days} grouped={grouped} selectedDate={selectedDate} today={today} timezone={timezone} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} /> : <MonthView days={days} grouped={grouped} selectedDate={selectedDate} today={today} selectedMonth={selectedMonth} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} />}
+        {view === "week" ? <WeekView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} timezone={timezone} onOpenCourse={setSelectedCourse} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} /> : <MonthView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} selectedMonth={selectedMonth} onSelectDate={setSelectedDate} onOpenCourse={setSelectedCourse} onOpen={openItem} onNew={openNew} />}
         <CanvasDeadlineStrip days={days} deadlines={canvasByDay} timezone={timezone} onComplete={markCanvasDeadline} />
         <footer className="calendar-footer"><span><i className="online-dot" />数据保存在此设备</span><span>{busy ? "正在读取本地日程…" : `${occurrences.length} 个日程实例`}</span></footer>
       </>}
     </section>
     {editor && <EventEditor key={`${editor.event?.id ?? "new"}-${editor.occurrence?.occurrenceId ?? editor.date}`} editor={editor} timezone={timezone} busy={busy} onClose={() => setEditor(null)} onSave={saveItem} onDelete={removeItem} />}
+    {selectedCourse && <CourseDetails course={selectedCourse} onClose={() => setSelectedCourse(null)} />}
   </main>;
 }
 
@@ -332,18 +369,85 @@ function CanvasSettings({ canvasStatus, notice, onConnect, onTest, onSync, onDis
   </section>;
 }
 
+function SjtuSettings({ status, notice, onStart, onFinish, onDisconnect, onSync }: {
+  status: SjtuConnectionStatus; notice: string;
+  onStart: (source: "undergraduate" | "graduate") => Promise<void>;
+  onFinish: (source: "undergraduate" | "graduate") => Promise<void>;
+  onDisconnect: (source: "undergraduate" | "graduate") => Promise<void>;
+  onSync: (source: "undergraduate" | "graduate", year: string, term: "1" | "2" | "3", startDate: string, weeks: number) => Promise<void>;
+}) {
+  const [source, setSource] = useState<"undergraduate" | "graduate">("undergraduate");
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [term, setTerm] = useState<"1" | "2" | "3">("1");
+  const [startDate, setStartDate] = useState("");
+  const [weekCount, setWeekCount] = useState(16);
+  const [working, setWorking] = useState(false);
+  const [problem, setProblem] = useState("");
+  const configured = source === "undergraduate" ? status.undergraduateConfigured : status.graduateConfigured;
+  async function run(action: () => Promise<void>) {
+    setWorking(true); setProblem("");
+    try { await action(); } catch (reason) { setProblem(reason instanceof Error ? reason.message : "教务操作失败"); }
+    finally { setWorking(false); }
+  }
+  return <section className="settings-panel sjtu-settings"><div className="settings-title"><div className="settings-icon">SJ</div><div><h2>SJTU 教务课表</h2><p>登录由你在独立的交大页面中完成；会话保存在 Windows Credential Manager。</p></div><span className={`connection-pill ${configured ? "connected" : ""}`}>{configured ? "已保存会话" : "未登录"}</span></div>
+    <label className="form-field"><span>教务系统</span><select value={source} onChange={(event) => setSource(event.target.value as typeof source)}><option value="undergraduate">本科生教务</option><option value="graduate">研究生教务</option></select></label>
+    <div className="settings-actions"><button className="cancel-button" disabled={working} onClick={() => void run(() => onStart(source))} type="button">打开交大登录窗口</button><button className="cancel-button" disabled={working} onClick={() => void run(() => onFinish(source))} type="button">保存登录会话</button><button className="delete-button" disabled={working || !configured} onClick={() => void run(() => onDisconnect(source))} type="button">断开教务</button></div>
+    <div className="form-two sjtu-term-fields"><label className="form-field"><span>学年起始年份</span><input inputMode="numeric" value={year} onChange={(event) => setYear(event.target.value)} /></label><label className="form-field"><span>学期</span><select value={term} onChange={(event) => setTerm(event.target.value as typeof term)}><option value="1">秋季（学年第一学期）</option><option value="2">春季（学年第二学期）</option><option value="3">夏季（学年第三学期）</option></select></label></div>
+    <div className="form-two sjtu-term-fields"><label className="form-field"><span>第 1 教学周的周一</span><input type="date" required value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label><label className="form-field"><span>教学周数（1–24）</span><input type="number" min={1} max={24} value={weekCount} onChange={(event) => setWeekCount(Number(event.target.value))} /></label></div>
+    <p className="settings-help">教务数据只提供周次与节次，不含可确认的学期首日。请填写该学期第一周周一和教学周数；课程时间按已审阅参考源码中的交大节次表映射。</p>
+    <button className="save-button" disabled={working || !configured || !startDate || !year.trim()} onClick={() => void run(() => onSync(source, year, term, startDate, weekCount))} type="button">刷新课表</button>
+    {problem && <div className="error-banner" role="alert">{problem}</div>}{notice && <p className="settings-feedback" role="status">{notice}</p>}
+  </section>;
+}
+
+function IcsImportSettings({ onImported }: { onImported: () => Promise<void> }) {
+  const [fileName, setFileName] = useState("");
+  const [content, setContent] = useState("");
+  const [firstMonday, setFirstMonday] = useState("");
+  const [weekCount, setWeekCount] = useState(16);
+  const [preview, setPreview] = useState<IcsPreview | null>(null);
+  const [replaceSource, setReplaceSource] = useState(true);
+  const [working, setWorking] = useState(false);
+  const [message, setMessage] = useState("");
+  const [problem, setProblem] = useState("");
+  async function run(action: () => Promise<void>) {
+    setWorking(true); setProblem(""); setMessage("");
+    try { await action(); } catch (reason) { setProblem(reason instanceof Error ? reason.message : "ICS 导入失败"); }
+    finally { setWorking(false); }
+  }
+  return <section className="settings-panel ics-settings"><div className="settings-title"><div className="settings-icon">ICS</div><div><h2>课表文件导入</h2><p>将课程 ICS 导入为本地个人日程；不会显示为教务同步成功。</p></div></div>
+    <label className="form-field"><span>ICS 文件</span><input type="file" accept=".ics,text/calendar" onChange={(event) => { const file = event.target.files?.[0]; setPreview(null); setMessage(""); if (!file) { setFileName(""); setContent(""); return; } setFileName(file.name); void file.text().then(setContent).catch(() => setProblem("无法读取所选文件")); }} /></label>
+    <div className="form-two sjtu-term-fields"><label className="form-field"><span>映射到学期首周周一</span><input type="date" value={firstMonday} onChange={(event) => { setFirstMonday(event.target.value); setPreview(null); }} /></label><label className="form-field"><span>教学周数（1–24）</span><input type="number" min={1} max={24} value={weekCount} onChange={(event) => { setWeekCount(Number(event.target.value)); setPreview(null); }} /></label></div>
+    <p className="settings-help">支持常规单次和每周重复 VEVENT；每周重复按学期范围展开。请核对预览中的课程和时间，再应用导入。当前不支持的复杂重复规则会明确报错。</p>
+    <label className="check-field"><input type="checkbox" checked={replaceSource} onChange={(event) => setReplaceSource(event.target.checked)} />替换同名来源之前导入的日程</label>
+    <div className="settings-actions"><button className="cancel-button" disabled={working || !content || !firstMonday} onClick={() => void run(async () => setPreview(await previewIcsImport(content, fileName, firstMonday, weekCount)))} type="button">预览导入</button><button className="save-button" disabled={working || !preview} onClick={() => void run(async () => { const count = await applyIcsImport(content, fileName, firstMonday, weekCount, replaceSource); setMessage(`已导入 ${count} 个本地日程（ICS 文件：${fileName}）`); setPreview(null); await onImported(); })} type="button">应用导入</button></div>
+    {preview && <div className="ics-preview" role="status"><strong>{preview.sourceName} · {preview.eventCount} 个日程</strong>{preview.preview.map((item, index) => <p key={`${item.startLocal}-${index}`}>{item.startLocal.replace("T", " ")} · {item.title}{item.location ? ` · ${item.location}` : ""}</p>)}{preview.eventCount > preview.preview.length && <small>仅显示前 {preview.preview.length} 项预览；应用时包含全部 {preview.eventCount} 项。</small>}</div>}
+    {problem && <div className="error-banner" role="alert">{problem}</div>}{message && <p className="settings-feedback" role="status">{message}</p>}
+  </section>;
+}
+
+function CourseDetails({ course, onClose }: { course: SjtuCourseOccurrence; onClose: () => void }) {
+  const timeFormat: Intl.DateTimeFormatOptions = { timeZone: course.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="event-modal course-details" role="dialog" aria-modal="true" aria-labelledby="course-details-title"><header className="modal-header"><div><p className="eyebrow">{course.sourceSystem === "undergraduate" ? "本科教务" : "研究生教务"} · 第 {course.weekNumber} 周</p><h2 id="course-details-title">{course.title}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header><div className="form-scroll"><p><strong>时间：</strong>{new Intl.DateTimeFormat("zh-CN", { ...timeFormat, weekday: "long", month: "long", day: "numeric" }).format(new Date(course.startUtc))} · {new Intl.DateTimeFormat("zh-CN", timeFormat).format(new Date(course.startUtc))}–{new Intl.DateTimeFormat("zh-CN", timeFormat).format(new Date(course.endUtc))}</p><p><strong>地点：</strong>{course.location || "未提供"}</p><p><strong>教师：</strong>{course.teacher || "未提供"}</p><p><strong>节次：</strong>第 {course.startSection}–{course.endSection} 节</p></div><footer className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>关闭</button></footer></section></div>;
+}
+
+function intervalLabel(startUtc: string, endUtc: string, timezone: string) {
+  const format: Intl.DateTimeFormatOptions = { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+  return `${new Intl.DateTimeFormat("zh-CN", format).format(new Date(startUtc))}–${new Intl.DateTimeFormat("zh-CN", format).format(new Date(endUtc))}`;
+}
+
 function CanvasDeadlineStrip({ days, deadlines, timezone, onComplete }: { days: string[]; deadlines: Map<string, CanvasDeadline[]>; timezone: string; onComplete: (item: CanvasDeadline, completed: boolean) => void }) {
   return <section className="canvas-strip" aria-label="Canvas 截止事项">{days.map((day) => <div className="canvas-strip-day" key={day}><strong>{weekday(day)} {Number(day.slice(-2))}</strong>{(deadlines.get(day) ?? []).map((item) => <div className={`canvas-deadline ${item.localCompleted ? "completed" : ""}`} key={`${item.courseId}-${item.assignmentId}`}><label><input type="checkbox" aria-label={`标记 ${item.title} 完成`} checked={item.localCompleted} onChange={(event) => onComplete(item, event.target.checked)} /><a href={item.htmlUrl} target="_blank" rel="noreferrer" title={item.courseName}>{item.title}</a></label><small>{item.courseName} · {new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(item.dueAt))}</small></div>)}</div>)}</section>;
 }
 
-function WeekView({ days, grouped, selectedDate, today, timezone, onSelectDate, onOpen, onNew }: {
-  days: string[]; grouped: Map<string, CalendarOccurrence[]>; selectedDate: string; today: string; timezone: string;
-  onSelectDate: (date: string) => void; onOpen: (item: CalendarOccurrence) => void; onNew: (date: string) => void;
+function WeekView({ days, grouped, coursesByDay, selectedDate, today, timezone, onOpenCourse, onSelectDate, onOpen, onNew }: {
+  days: string[]; grouped: Map<string, CalendarOccurrence[]>; coursesByDay: Map<string, SjtuCourseOccurrence[]>; selectedDate: string; today: string; timezone: string;
+  onOpenCourse: (item: SjtuCourseOccurrence) => void; onSelectDate: (date: string) => void; onOpen: (item: CalendarOccurrence) => void; onNew: (date: string) => void;
 }) {
   return <section className="week-view" aria-label="周日历">
     <div className="week-head"><div className="time-gutter" />{days.map((day) => <button key={day} className={`day-heading ${day === selectedDate ? "focus" : ""} ${day === today ? "is-today" : ""}`} onClick={() => onSelectDate(day)} type="button"><span>{weekday(day)}</span><strong>{Number(day.slice(-2))}</strong><small>{(grouped.get(day) ?? []).length ? "有日程" : ""}</small></button>)}</div>
     <div className="week-scroll"><div className="time-grid"><div className="time-gutter">{Array.from({ length: LAST_HOUR - FIRST_HOUR }, (_, i) => <span style={{ top: `${i * HOUR_HEIGHT - 8}px` }} key={i}>{String(FIRST_HOUR + i).padStart(2, "0")}:00</span>)}</div>{days.map((day) => {
-      const timed = (grouped.get(day) ?? []).filter((item) => item.category !== "deadline" && !item.allDay);
+      const timed = [...(grouped.get(day) ?? []).filter((item) => item.category !== "deadline" && !item.allDay), ...(coursesByDay.get(day) ?? [])];
       const overlapLayout = layoutOverlaps(timed);
       return <div className="time-column" key={day} onDoubleClick={() => onNew(day)}>{Array.from({ length: LAST_HOUR - FIRST_HOUR + 1 }, (_, i) => <span className="hour-line" style={{ top: `${i * HOUR_HEIGHT}px` }} key={i} />)}{timed.map((item) => {
         const start = clock(item.startUtc, timezone); const end = clock(item.endUtc, timezone);
@@ -352,20 +456,24 @@ function WeekView({ days, grouped, selectedDate, today, timezone, onSelectDate, 
         if (hours <= 0) hours += 24;
         const height = Math.max(27, Math.min(HOUR_HEIGHT * (LAST_HOUR - FIRST_HOUR) - top, hours * HOUR_HEIGHT));
         const position = overlapLayout.get(item.occurrenceId) ?? { column: 0, columns: 1 };
-        return <button className="event-block" style={{ top: `${Math.max(0, top)}px`, height: `${height}px`, left: `calc(${position.column * 100 / position.columns}% + 3px)`, right: `calc(${(position.columns - position.column - 1) * 100 / position.columns}% + 3px)`, borderLeftColor: item.color }} key={item.occurrenceId} onClick={() => onOpen(item)} type="button"><strong>{item.title}</strong><span>{timeLabel(item, timezone)}</span>{height > 54 && item.location && <small>{item.location}</small>}</button>;
+        const isCourse = "courseId" in item;
+        return <button className={`event-block ${isCourse ? "course-block" : ""}`} style={{ top: `${Math.max(0, top)}px`, height: `${height}px`, left: `calc(${position.column * 100 / position.columns}% + 3px)`, right: `calc(${(position.columns - position.column - 1) * 100 / position.columns}% + 3px)`, borderLeftColor: item.color }} key={item.occurrenceId} onClick={() => isCourse ? onOpenCourse(item) : onOpen(item)} type="button"><strong>{item.title}</strong><span>{isCourse ? intervalLabel(item.startUtc, item.endUtc, timezone) : timeLabel(item, timezone)}</span>{height > 54 && item.location && <small>{item.location}</small>}{isCourse && height > 74 && item.teacher && <small>{item.teacher}</small>}</button>;
       })}</div>;
     })}</div></div>
     <div className="deadline-row"><div className="deadline-label">全天 / DDL</div>{days.map((day) => { const items = (grouped.get(day) ?? []).filter((item) => item.category === "deadline" || item.allDay); return <div className="deadline-cell" key={day} onDoubleClick={() => onNew(day)}>{items.length ? items.map((item) => <button key={item.occurrenceId} className={`deadline-chip ${item.category === "deadline" ? "deadline" : "all-day"}`} onClick={() => onOpen(item)} type="button"><span>{item.category === "deadline" ? "◆" : "●"}</span>{item.title}</button>) : <button className="add-inline" onClick={() => onNew(day)} aria-label={`${day} 新建日程`} type="button">＋</button>}</div>; })}</div>
   </section>;
 }
 
-function MonthView({ days, grouped, selectedDate, today, selectedMonth, onSelectDate, onOpen, onNew }: {
-  days: string[]; grouped: Map<string, CalendarOccurrence[]>; selectedDate: string; today: string; selectedMonth: string;
-  onSelectDate: (date: string) => void; onOpen: (item: CalendarOccurrence) => void; onNew: (date: string) => void;
+function MonthView({ days, grouped, coursesByDay, selectedDate, today, selectedMonth, onSelectDate, onOpenCourse, onOpen, onNew }: {
+  days: string[]; grouped: Map<string, CalendarOccurrence[]>; coursesByDay: Map<string, SjtuCourseOccurrence[]>; selectedDate: string; today: string; selectedMonth: string;
+  onSelectDate: (date: string) => void; onOpenCourse: (item: SjtuCourseOccurrence) => void; onOpen: (item: CalendarOccurrence) => void; onNew: (date: string) => void;
 }) {
   return <section className="month-view" aria-label="月日历"><div className="month-weekdays">{"一二三四五六日".split("").map((day) => <span key={day}>{day}</span>)}</div><div className="month-grid">{days.map((day) => {
     const items = grouped.get(day) ?? [];
-    return <div role="button" tabIndex={0} className={`month-cell ${day.slice(5, 7) !== selectedMonth ? "outside" : ""} ${day === selectedDate ? "chosen" : ""} ${day === today ? "is-today" : ""}`} key={day} onClick={() => onSelectDate(day)} onDoubleClick={() => onNew(day)} onKeyDown={(event) => { if (event.key === "Enter") onSelectDate(day); }}><span className="month-date">{Number(day.slice(-2))}</span>{items.slice(0, 3).map((item) => <button key={item.occurrenceId} className={`month-event ${item.category === "deadline" ? "deadline" : ""}`} style={{ borderLeftColor: item.color }} onClick={(event) => { event.stopPropagation(); onOpen(item); }} type="button">{item.title}</button>)}{items.length > 3 && <small className="more-events">+{items.length - 3} 项</small>}</div>;
+    const courses = coursesByDay.get(day) ?? [];
+    const visibleLocal = items.slice(0, 3);
+    const visibleCourses = courses.slice(0, Math.max(0, 3 - visibleLocal.length));
+    return <div role="button" tabIndex={0} className={`month-cell ${day.slice(5, 7) !== selectedMonth ? "outside" : ""} ${day === selectedDate ? "chosen" : ""} ${day === today ? "is-today" : ""}`} key={day} onClick={() => onSelectDate(day)} onDoubleClick={() => onNew(day)} onKeyDown={(event) => { if (event.key === "Enter") onSelectDate(day); }}><span className="month-date">{Number(day.slice(-2))}</span>{visibleLocal.map((item) => <button key={item.occurrenceId} className={`month-event ${item.category === "deadline" ? "deadline" : ""}`} style={{ borderLeftColor: item.color }} onClick={(event) => { event.stopPropagation(); onOpen(item); }} type="button">{item.title}</button>)}{visibleCourses.map((item) => <button key={item.occurrenceId} className="month-event course-month-event" style={{ borderLeftColor: item.color }} onClick={(event) => { event.stopPropagation(); onOpenCourse(item); }} type="button">{item.title}</button>)}{items.length + courses.length > 3 && <small className="more-events">+{items.length + courses.length - 3} 项</small>}</div>;
   })}</div></section>;
 }
 

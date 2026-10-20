@@ -1,6 +1,8 @@
 mod canvas;
 mod db;
 mod events;
+mod ics;
+mod sjtu;
 
 use serde::Serialize;
 use std::{fs, path::PathBuf};
@@ -96,6 +98,35 @@ fn get_calendar_occurrences(
 }
 
 #[tauri::command]
+fn preview_ics_import(
+    content: String,
+    source_name: String,
+    first_monday: String,
+    week_count: u8,
+) -> Result<ics::IcsPreview, String> {
+    ics::preview(&content, &source_name, &first_monday, week_count)
+}
+
+#[tauri::command]
+fn apply_ics_import(
+    state: State<'_, AppState>,
+    content: String,
+    source_name: String,
+    first_monday: String,
+    week_count: u8,
+    replace_source: bool,
+) -> Result<usize, String> {
+    ics::apply(
+        &state.database_path,
+        &content,
+        &source_name,
+        &first_monday,
+        week_count,
+        replace_source,
+    )
+}
+
+#[tauri::command]
 fn save_canvas_credentials(
     state: State<'_, AppState>,
     instance_url: String,
@@ -153,6 +184,62 @@ fn set_canvas_assignment_completed(
     canvas::set_local_completed(&state.database_path, &course_id, &assignment_id, completed)
 }
 
+#[tauri::command]
+fn get_sjtu_connection_status() -> sjtu::SjtuConnectionStatus {
+    sjtu::connection_status()
+}
+
+#[tauri::command]
+fn start_sjtu_login(app: tauri::AppHandle, source_system: String) -> Result<(), String> {
+    sjtu::start_login(&app, &source_system)
+}
+
+#[tauri::command]
+async fn finish_sjtu_login(app: tauri::AppHandle, source_system: String) -> Result<(), String> {
+    sjtu::finish_login(&app, &source_system).await
+}
+
+#[tauri::command]
+fn clear_sjtu_login(source_system: String) -> Result<(), String> {
+    sjtu::clear_login(&source_system)
+}
+
+#[tauri::command]
+async fn sync_sjtu(
+    state: State<'_, AppState>,
+    source_system: String,
+    academic_year: String,
+    term_code: String,
+    start_date: String,
+    week_count: u8,
+) -> Result<sjtu::SjtuSyncResult, String> {
+    sjtu::sync(
+        &state.database_path,
+        &source_system,
+        &academic_year,
+        &term_code,
+        &start_date,
+        week_count,
+    )
+    .await
+}
+
+#[tauri::command]
+async fn get_sjtu_course_occurrences(
+    state: State<'_, AppState>,
+    from_date: String,
+    to_date: String,
+    display_timezone: String,
+) -> Result<Vec<sjtu::SjtuCourseOccurrence>, String> {
+    sjtu::course_occurrences(
+        &state.database_path,
+        &from_date,
+        &to_date,
+        &display_timezone,
+    )
+    .await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -173,13 +260,21 @@ pub fn run() {
             list_personal_events,
             set_recurrence_exception,
             get_calendar_occurrences,
+            preview_ics_import,
+            apply_ics_import,
             save_canvas_credentials,
             clear_canvas_credentials,
             get_canvas_connection_status,
             test_canvas_connection,
             sync_canvas,
             get_canvas_deadlines,
-            set_canvas_assignment_completed
+            set_canvas_assignment_completed,
+            get_sjtu_connection_status,
+            start_sjtu_login,
+            finish_sjtu_login,
+            clear_sjtu_login,
+            sync_sjtu,
+            get_sjtu_course_occurrences
         ])
         .run(tauri::generate_context!())
         .expect("failed to run SJTU Schedule");
