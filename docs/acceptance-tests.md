@@ -9,6 +9,6 @@
 - [x] `cargo test`（`src-tauri`）— 1 个 SQLite migration 测试通过；main/doc tests 无失败。
 - [x] `pnpm tauri dev` — 实际打开 Windows Tauri 窗口；受限 CSP 加入前点击“检查本地存储”显示 SQLite 已连接、迁移版本 1。数据库文件创建于 `%APPDATA%\edu.sjtu.schedule\calendar.sqlite3`。CSP 收紧后再次运行已完成编译并启动应用，但桌面检查被物理 Escape 键中断，因此未再次点击 invoke。
 - [x] `git check-ignore` — 两个参考仓库均由 `references/` 规则忽略。
-- [ ] Commit 与 main 合并 — 在文档记录后完成。
+- [x] Commit — `b7e00c4a44b737fa9e3ee03a0e0b35de5aeafa25`（bootstrap 根提交）；日志更新后 fast-forward 到本地 `main`。
 
 结果待实际执行后更新。
