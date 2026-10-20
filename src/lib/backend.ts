@@ -18,18 +18,8 @@ export interface EventDraft {
   color: string;
 }
 
-export interface PersonalEvent {
+export interface PersonalEvent extends EventDraft {
   id: string;
-  title: string;
-  description: string;
-  location: string;
-  category: "event" | "deadline";
-  startLocal: string;
-  endLocal: string;
-  timezone: string;
-  allDay: boolean;
-  rrule: string | null;
-  color: string;
   createdAt: string;
   updatedAt: string;
 }
