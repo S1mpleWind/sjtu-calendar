@@ -5,6 +5,15 @@ export interface BackendStatus {
   schemaVersion: number;
 }
 
+export interface CanvasConnectionStatus { configured: boolean; instanceUrl: string | null }
+export interface CanvasProfile { userId: string; name: string; instanceUrl: string }
+export interface CanvasSyncResult { state: string; courseCount: number; assignmentCount: number; failedCourses: string[]; syncedAt: string }
+export interface CanvasDeadline {
+  instanceUrl: string; userId: string; courseId: string; assignmentId: string; courseName: string;
+  title: string; description: string; dueAt: string; lockAt: string | null; htmlUrl: string;
+  workflowState: string | null; submittedAt: string | null; grade: string | null; localCompleted: boolean;
+}
+
 export interface EventDraft {
   title: string;
   description: string;
@@ -94,3 +103,14 @@ export const getCalendarOccurrences = (
     toDate,
     displayTimezone,
   });
+
+export const saveCanvasCredentials = (instanceUrl: string, token: string) =>
+  invoke<void>("save_canvas_credentials", { instanceUrl, token });
+export const clearCanvasCredentials = () => invoke<void>("clear_canvas_credentials");
+export const getCanvasConnectionStatus = () => invoke<CanvasConnectionStatus>("get_canvas_connection_status");
+export const testCanvasConnection = () => invoke<CanvasProfile>("test_canvas_connection");
+export const syncCanvas = () => invoke<CanvasSyncResult>("sync_canvas");
+export const getCanvasDeadlines = (fromDate: string, toDate: string, displayTimezone: string) =>
+  invoke<CanvasDeadline[]>("get_canvas_deadlines", { fromDate, toDate, displayTimezone });
+export const setCanvasAssignmentCompleted = (courseId: string, assignmentId: string, completed: boolean) =>
+  invoke<void>("set_canvas_assignment_completed", { courseId, assignmentId, completed });

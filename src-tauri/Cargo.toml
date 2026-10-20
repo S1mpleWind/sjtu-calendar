@@ -26,6 +26,8 @@ chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"
 rrule = "0.14"
 uuid = { version = "1", features = ["v4", "serde"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+keyring = { version = "4.2", features = ["v1"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
@@ -38,3 +40,4 @@ strip = true
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

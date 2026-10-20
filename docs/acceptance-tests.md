@@ -31,3 +31,10 @@
 - [x] Refresh, query error and retry states; timezone preference persists in this device's localStorage.
 - [x] `pnpm lint`, `pnpm test` (4 tests), `pnpm build`, `cargo fmt --check`, `cargo test` (6 tests); `pnpm tauri dev` launched the Windows executable.
 - [ ] Manual native-window resize/high-DPI and live CRUD review.
+
+## Phase 3 — Canvas
+
+- [x] `cargo fmt --check` and `cargo test` (10 tests): verified instance allowlist, local HTTP fixture sends Bearer auth and follows Canvas Link pagination, repeated upsert retains a local completion flag, partial sync preserves previously cached rows, and cached deadline query works without any network call.
+- [x] `pnpm lint`, `pnpm test` (5 tests, including the secure Canvas credential command flow), and `pnpm build`.
+- [x] No fixture or mock result is used by the app at runtime; user must enter their own token in Settings and use Test Connection/Sync.
+- [ ] User-authenticated live Canvas test. Requires the user to enter a token locally in the application; do not send the token in chat.

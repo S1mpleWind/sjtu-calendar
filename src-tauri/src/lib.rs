@@ -1,3 +1,4 @@
+mod canvas;
 mod db;
 mod events;
 
@@ -94,6 +95,64 @@ fn get_calendar_occurrences(
     )
 }
 
+#[tauri::command]
+fn save_canvas_credentials(
+    state: State<'_, AppState>,
+    instance_url: String,
+    token: String,
+) -> Result<(), String> {
+    canvas::save_credentials(&state.database_path, &instance_url, &token)
+}
+
+#[tauri::command]
+fn clear_canvas_credentials(state: State<'_, AppState>) -> Result<(), String> {
+    canvas::clear_credentials(&state.database_path)
+}
+
+#[tauri::command]
+fn get_canvas_connection_status(
+    state: State<'_, AppState>,
+) -> Result<canvas::CanvasConnectionStatus, String> {
+    canvas::connection_status(&state.database_path)
+}
+
+#[tauri::command]
+async fn test_canvas_connection(
+    state: State<'_, AppState>,
+) -> Result<canvas::CanvasProfile, String> {
+    canvas::test_connection(&state.database_path).await
+}
+
+#[tauri::command]
+async fn sync_canvas(state: State<'_, AppState>) -> Result<canvas::CanvasSyncResult, String> {
+    canvas::sync(&state.database_path).await
+}
+
+#[tauri::command]
+fn get_canvas_deadlines(
+    state: State<'_, AppState>,
+    from_date: String,
+    to_date: String,
+    display_timezone: String,
+) -> Result<Vec<canvas::CanvasDeadline>, String> {
+    canvas::deadlines(
+        &state.database_path,
+        &from_date,
+        &to_date,
+        &display_timezone,
+    )
+}
+
+#[tauri::command]
+fn set_canvas_assignment_completed(
+    state: State<'_, AppState>,
+    course_id: String,
+    assignment_id: String,
+    completed: bool,
+) -> Result<(), String> {
+    canvas::set_local_completed(&state.database_path, &course_id, &assignment_id, completed)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -113,7 +172,14 @@ pub fn run() {
             get_personal_event,
             list_personal_events,
             set_recurrence_exception,
-            get_calendar_occurrences
+            get_calendar_occurrences,
+            save_canvas_credentials,
+            clear_canvas_credentials,
+            get_canvas_connection_status,
+            test_canvas_connection,
+            sync_canvas,
+            get_canvas_deadlines,
+            set_canvas_assignment_completed
         ])
         .run(tauri::generate_context!())
         .expect("failed to run SJTU Schedule");

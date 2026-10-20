@@ -3,6 +3,7 @@ use std::path::Path;
 
 const INITIAL_MIGRATION: &str = include_str!("../migrations/0001_initial.sql");
 const PERSONAL_EVENTS_MIGRATION: &str = include_str!("../migrations/0002_personal_events.sql");
+const CANVAS_CACHE_MIGRATION: &str = include_str!("../migrations/0003_canvas_cache.sql");
 
 pub fn initialize_database(path: &Path) -> rusqlite::Result<i64> {
     let mut connection = Connection::open(path)?;
@@ -19,7 +20,11 @@ pub(super) fn apply_migrations(connection: &mut Connection) -> rusqlite::Result<
         );",
     )?;
 
-    for (version, sql) in [(1, INITIAL_MIGRATION), (2, PERSONAL_EVENTS_MIGRATION)] {
+    for (version, sql) in [
+        (1, INITIAL_MIGRATION),
+        (2, PERSONAL_EVENTS_MIGRATION),
+        (3, CANVAS_CACHE_MIGRATION),
+    ] {
         let applied = connection
             .query_row(
                 "SELECT version FROM schema_migrations WHERE version = ?1",
@@ -53,14 +58,14 @@ mod tests {
     use rusqlite::Connection;
 
     #[test]
-    fn migrations_upgrade_to_v2_once_and_preserve_default_timezone() {
+    fn migrations_upgrade_to_v3_once_and_preserve_default_timezone() {
         let mut connection = Connection::open_in_memory().expect("open in-memory database");
 
         assert_eq!(
             apply_migrations(&mut connection).expect("apply initial migration"),
-            2
+            3
         );
-        assert_eq!(apply_migrations(&mut connection).expect("apply again"), 2);
+        assert_eq!(apply_migrations(&mut connection).expect("apply again"), 3);
 
         let timezone: String = connection
             .query_row(
@@ -83,11 +88,16 @@ mod tests {
                 row.get(0)
             })
             .expect("count migrations");
-        assert_eq!(migration_count, 2);
+        assert_eq!(migration_count, 3);
         connection
             .query_row("SELECT COUNT(*) FROM recurrence_exceptions", [], |row| {
                 row.get::<_, i64>(0)
             })
             .expect("v2 recurrence exceptions table exists");
+        connection
+            .query_row("SELECT COUNT(*) FROM canvas_assignments", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .expect("v3 canvas cache table exists");
     }
 }

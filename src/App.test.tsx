@@ -13,6 +13,8 @@ describe("calendar window", () => {
     invoke.mockReset();
     invoke.mockImplementation((command: string) => {
       if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 2 });
+      if (command === "get_canvas_deadlines") return Promise.resolve([]);
+      if (command === "get_canvas_connection_status") return Promise.resolve({ configured: false, instanceUrl: null });
       if (command === "get_calendar_occurrences" || command === "list_personal_events") return Promise.resolve([]);
       return Promise.resolve(null);
     });
@@ -56,6 +58,8 @@ describe("calendar window", () => {
     const instant = (time: string) => new Date(`${date}T${time}+08:00`).toISOString();
     invoke.mockImplementation((command: string) => {
       if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 2 });
+      if (command === "get_canvas_deadlines") return Promise.resolve([]);
+      if (command === "get_canvas_connection_status") return Promise.resolve({ configured: false, instanceUrl: null });
       if (command === "list_personal_events") return Promise.resolve([]);
       if (command === "get_calendar_occurrences") return Promise.resolve([
         { occurrenceId: "a", eventId: "a", originalStartLocal: `${date}T10:00:00`, title: "Overlap A", description: "", location: "", category: "event", startUtc: instant("10:00:00"), endUtc: instant("11:00:00"), timezone: "Asia/Shanghai", displayTimezone: "Asia/Shanghai", allDay: false, color: "#34785c" },
@@ -67,5 +71,17 @@ describe("calendar window", () => {
     await waitFor(() => expect(container.querySelectorAll(".event-block")).toHaveLength(2));
     const [first, second] = Array.from(container.querySelectorAll<HTMLElement>(".event-block"));
     expect(first.style.left).not.toBe(second.style.left);
+  });
+
+  it("sends a typed Canvas token to the secure backend command only", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "⚙设置" }));
+    await user.type(screen.getByLabelText("个人访问令牌"), "fixture-token-not-a-real-credential");
+    await user.click(screen.getByRole("button", { name: "安全保存令牌" }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("save_canvas_credentials", expect.objectContaining({
+      instanceUrl: "https://oc.sjtu.edu.cn", token: "fixture-token-not-a-real-credential",
+    })));
+    expect(localStorage.getItem("canvas-token")).toBeNull();
   });
 });

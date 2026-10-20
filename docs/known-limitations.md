@@ -13,3 +13,7 @@
 - Ambiguous local times choose the earlier offset. Nonexistent initial event times are rejected, and generated recurrence starts in a DST gap are skipped.
 
 - Phase 2's calendar UI is connected to real local Rust/SQLite commands, but native-window resize/high-DPI appearance and CRUD in the live WebView have not been manually reviewed. Automated React interaction tests cover creation invocation, view switching, timezone changes and overlapping-event layout.
+
+- Phase 3 Canvas API behavior is covered with a local HTTP fixture; no real account/token has been used. A user must configure a personal token locally and verify the instance with Test Connection before syncing live records.
+- Canvas support is limited to the two origins verified in the inspected helper source: `https://oc.sjtu.edu.cn` and `https://jicanvas.com`. Only assignment `due_at` values are currently shown; section-specific `all_dates`/override details are requested but not independently projected.
+- Canvas user-facing configuration and cached weekly/monthly deadline rendering have automated build coverage, but the native WebView and Windows Credential Manager interaction still need a manual acceptance pass on this machine.

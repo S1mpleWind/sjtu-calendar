@@ -16,3 +16,7 @@ The Rust backend now exposes typed personal-event CRUD, recurrence-exception and
 ## Phase 2 update
 
 The main window now renders local query results in week/month layouts and supports event creation, editing, removal, one-occurrence exceptions, timezone selection, refresh and error states. Canvas/SJTU source indicators remain disconnected until their sync phases.
+
+## Phase 3 update — Canvas
+
+`src-tauri/src/canvas.rs` owns the Canvas HTTP client, token access through Windows Credential Manager, paginated API reads, SQLite cache updates and local completion flags. Canvas credentials and cache never enter browser storage. Startup calendar queries read the last synchronized user cache without network access. Partial course failures preserve existing cache rows; a fully successful sync archives rows no longer returned. See `docs/integration-canvas.md` for endpoint and security details.

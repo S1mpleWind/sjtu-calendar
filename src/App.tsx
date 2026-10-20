@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
-  createPersonalEvent, deletePersonalEvent, getBackendStatus, getCalendarOccurrences,
+  createPersonalEvent, deletePersonalEvent, getBackendStatus, getCalendarOccurrences, getCanvasConnectionStatus, getCanvasDeadlines, setCanvasAssignmentCompleted, saveCanvasCredentials, clearCanvasCredentials, testCanvasConnection, syncCanvas,
   getPersonalEvent, listPersonalEvents, setRecurrenceException, updatePersonalEvent,
-  type BackendStatus, type CalendarOccurrence, type EventDraft, type PersonalEvent,
+  type BackendStatus, type CalendarOccurrence, type EventDraft, type PersonalEvent, type CanvasConnectionStatus, type CanvasDeadline,
   type RecurrenceOverride,
 } from "./lib/backend";
 import "./App.css";
@@ -124,6 +124,9 @@ function App() {
   const [miniMonth, setMiniMonth] = useState(selectedDate);
   const [occurrences, setOccurrences] = useState<CalendarOccurrence[]>([]);
   const [events, setEvents] = useState<PersonalEvent[]>([]);
+  const [canvasDeadlines, setCanvasDeadlines] = useState<CanvasDeadline[]>([]);
+  const [canvasStatus, setCanvasStatus] = useState<CanvasConnectionStatus>({ configured: false, instanceUrl: null });
+  const [canvasNotice, setCanvasNotice] = useState("");
   const [status, setStatus] = useState<BackendStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -149,18 +152,29 @@ function App() {
     }
     return result;
   }, [occurrences, timezone]);
+  const canvasByDay = useMemo(() => {
+    const result = new Map<string, CanvasDeadline[]>();
+    for (const item of canvasDeadlines) {
+      const date = dateInZone(new Date(item.dueAt), timezone);
+      result.set(date, [...(result.get(date) ?? []), item]);
+    }
+    return result;
+  }, [canvasDeadlines, timezone]);
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
     setBusy(true);
     setError(null);
     try {
-      const [items, saved, backend] = await Promise.all([
+      const [items, saved, backend, cachedDeadlines, connection] = await Promise.all([
         getCalendarOccurrences(range.from, range.to, timezone), listPersonalEvents(), getBackendStatus(),
+        getCanvasDeadlines(range.from, range.to, timezone), getCanvasConnectionStatus(),
       ]);
       if (sequence !== refreshSequence.current) return;
       setOccurrences(items);
       setEvents(saved);
       setStatus(backend);
+      setCanvasDeadlines(cachedDeadlines);
+      setCanvasStatus(connection);
     } catch (reason) {
       if (sequence === refreshSequence.current) setError(reason instanceof Error ? reason.message : "读取本地日程失败，请检查应用数据库状态。");
     } finally { if (sequence === refreshSequence.current) setBusy(false); }
@@ -216,6 +230,33 @@ function App() {
     finally { setBusy(false); }
   }
 
+  async function markCanvasDeadline(item: CanvasDeadline, completed: boolean) {
+    try {
+      await setCanvasAssignmentCompleted(item.courseId, item.assignmentId, completed);
+      setCanvasDeadlines((current) => current.map((entry) => entry.courseId === item.courseId && entry.assignmentId === item.assignmentId ? { ...entry, localCompleted: completed } : entry));
+    } catch (reason) { setCanvasNotice(reason instanceof Error ? reason.message : "无法更新本地完成标记"); }
+  }
+  async function connectCanvas(instance: string, token: string) {
+    await saveCanvasCredentials(instance, token);
+    setCanvasStatus(await getCanvasConnectionStatus());
+    setCanvasNotice("凭据已安全保存。请测试连接以验证 Canvas 账户。");
+  }
+  async function runCanvasTest() {
+    const profile = await testCanvasConnection();
+    setCanvasNotice(`已连接：${profile.name || profile.userId}（${profile.instanceUrl}）`);
+  }
+  async function runCanvasSync() {
+    const result = await syncCanvas();
+    setCanvasNotice(`同步${result.state === "succeeded" ? "完成" : "部分完成"}：${result.courseCount} 门课程，${result.assignmentCount} 项作业${result.failedCourses.length ? `；${result.failedCourses.length} 门课程失败` : ""}`);
+    await refresh();
+  }
+  async function disconnectCanvas() {
+    await clearCanvasCredentials();
+    setCanvasStatus({ configured: false, instanceUrl: null });
+    setCanvasNotice("已从 Windows Credential Manager 移除 Canvas 凭据。");
+    setCanvasDeadlines([]);
+  }
+
   const miniDays = useMemo(() => Array.from({ length: 42 }, (_, index) => addDays(gridStart(miniMonth), index)), [miniMonth]);
   const selectedMonth = selectedDate.slice(5, 7);
   const today = todayInZone(timezone);
@@ -237,7 +278,7 @@ function App() {
       </section>
       <div className="side-section-title">日程来源</div>
       <div className="source-row"><span className="source-dot local" />个人日程 <span className="source-count">{events.length}</span></div>
-      <div className="source-row muted"><span className="source-dot canvas" />Canvas <span className="source-state">待连接</span></div>
+      <div className="source-row"><span className="source-dot canvas" />Canvas <span className="source-state">{canvasStatus.configured ? `${canvasDeadlines.length} 项缓存` : "待连接"}</span></div>
       <div className="source-row muted"><span className="source-dot sjtu" />SJTU 教务 <span className="source-state">待连接</span></div>
       <button className="sidebar-add" onClick={() => openNew()} type="button">＋ 新建日程</button>
       <div className="sidebar-footer"><span className="online-dot" />{status ? `本地 SQLite · v${status.schemaVersion}` : "本地数据"}</div>
@@ -253,10 +294,11 @@ function App() {
         </> : <div className="topbar-spacer" />}
       </header>
 
-      {page === "settings" ? <Settings timezone={timezone} onTimezoneChange={setTimezone} /> : <>
+      {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /></> : <>
         <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>{view === "week" ? "每周一开始 · 全天与截止事项单独显示" : "选择日期查看和管理日程"}</p></div><button className="refresh-button" aria-label="刷新日历" onClick={() => void refresh()} disabled={busy} type="button">↻</button></section>
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => void refresh()} type="button">重试</button></div>}
         {view === "week" ? <WeekView days={days} grouped={grouped} selectedDate={selectedDate} today={today} timezone={timezone} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} /> : <MonthView days={days} grouped={grouped} selectedDate={selectedDate} today={today} selectedMonth={selectedMonth} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} />}
+        <CanvasDeadlineStrip days={days} deadlines={canvasByDay} timezone={timezone} onComplete={markCanvasDeadline} />
         <footer className="calendar-footer"><span><i className="online-dot" />数据保存在此设备</span><span>{busy ? "正在读取本地日程…" : `${occurrences.length} 个日程实例`}</span></footer>
       </>}
     </section>
@@ -266,6 +308,32 @@ function App() {
 
 function Settings({ timezone, onTimezoneChange }: { timezone: string; onTimezoneChange: (zone: string) => void }) {
   return <section className="settings-panel"><div className="settings-title"><div className="settings-icon">◷</div><div><h2>日历显示</h2><p>调整个人日程的显示方式。</p></div></div><label className="setting-row"><span><strong>显示时区</strong><small>事件按此时区分组，重复日程仍遵循创建时的时区。</small></span><select aria-label="显示时区" value={timezone} onChange={(event) => onTimezoneChange(event.target.value)}>{ZONES.map((zone) => <option value={zone} key={zone}>{zone}</option>)}</select></label><div className="settings-note"><span className="online-dot" />仅保存在此设备。Canvas 和教务连接将在后续阶段设置。</div></section>;
+}
+
+function CanvasSettings({ canvasStatus, notice, onConnect, onTest, onSync, onDisconnect }: {
+  canvasStatus: CanvasConnectionStatus; notice: string; onConnect: (instance: string, token: string) => Promise<void>;
+  onTest: () => Promise<void>; onSync: () => Promise<void>; onDisconnect: () => Promise<void>;
+}) {
+  const [instance, setInstance] = useState(canvasStatus.instanceUrl ?? "https://oc.sjtu.edu.cn");
+  const [token, setToken] = useState("");
+  const [working, setWorking] = useState(false);
+  const [problem, setProblem] = useState("");
+  async function run(action: () => Promise<void>) {
+    setWorking(true); setProblem("");
+    try { await action(); } catch (reason) { setProblem(reason instanceof Error ? reason.message : "Canvas 操作失败"); }
+    finally { setWorking(false); }
+  }
+  return <section className="settings-panel canvas-settings"><div className="settings-title"><div className="settings-icon">C</div><div><h2>Canvas 同步</h2><p>读取课程与作业截止时间 · {canvasStatus.configured ? "已配置" : "未连接"}</p></div></div>
+    <label className="form-field"><span>Canvas 实例</span><select value={instance} onChange={(event) => setInstance(event.target.value)}><option value="https://oc.sjtu.edu.cn">上海交通大学 Canvas</option><option value="https://jicanvas.com">交我算 Canvas</option></select></label>
+    <label className="form-field"><span>个人访问令牌</span><input type="password" autoComplete="new-password" value={token} onChange={(event) => setToken(event.target.value)} placeholder={canvasStatus.configured ? "已保存；输入新令牌可替换" : "在 Canvas 账户设置中生成令牌"} /></label>
+    <p className="settings-help">令牌保存在 Windows Credential Manager，不会写入日历数据库或日志。请在 Canvas 账户设置中自行生成。</p>
+    <div className="settings-actions"><button className="save-button" disabled={working || !token.trim()} onClick={() => void run(async () => { await onConnect(instance, token); setToken(""); })} type="button">安全保存令牌</button><button className="cancel-button" disabled={working || !canvasStatus.configured} onClick={() => void run(onTest)} type="button">测试连接</button><button className="cancel-button" disabled={working || !canvasStatus.configured} onClick={() => void run(onSync)} type="button">立即同步</button><button className="delete-button" disabled={working || !canvasStatus.configured} onClick={() => void run(onDisconnect)} type="button">断开连接</button></div>
+    {problem && <div className="error-banner" role="alert">{problem}</div>}{notice && <p className="settings-feedback" role="status">{notice}</p>}
+  </section>;
+}
+
+function CanvasDeadlineStrip({ days, deadlines, timezone, onComplete }: { days: string[]; deadlines: Map<string, CanvasDeadline[]>; timezone: string; onComplete: (item: CanvasDeadline, completed: boolean) => void }) {
+  return <section className="canvas-strip" aria-label="Canvas 截止事项">{days.map((day) => <div className="canvas-strip-day" key={day}><strong>{weekday(day)} {Number(day.slice(-2))}</strong>{(deadlines.get(day) ?? []).map((item) => <div className={`canvas-deadline ${item.localCompleted ? "completed" : ""}`} key={`${item.courseId}-${item.assignmentId}`}><label><input type="checkbox" aria-label={`标记 ${item.title} 完成`} checked={item.localCompleted} onChange={(event) => onComplete(item, event.target.checked)} /><a href={item.htmlUrl} target="_blank" rel="noreferrer" title={item.courseName}>{item.title}</a></label><small>{item.courseName} · {new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(item.dueAt))}</small></div>)}</div>)}</section>;
 }
 
 function WeekView({ days, grouped, selectedDate, today, timezone, onSelectDate, onOpen, onNew }: {

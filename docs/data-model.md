@@ -11,3 +11,7 @@ Phase 0 仅创建 `app_settings(key, value_json, updated_at)` 并以 `schema_mig
 `recurrence_exceptions` uses `(event_id, original_start_local)` as the unique recurrence identity. A cancelled occurrence has no override JSON. An overridden occurrence stores a validated event snapshot, so moving or renaming one date does not change its series. Calendar queries project matching records as UTC instants and include the requested display timezone.
 
 Rust owns validation, RRULE expansion, exception application and SQLite access. Event creation rejects invalid IANA zones, nonexistent local start/end times, unsupported categories, empty titles, invalid colors and reversed or overlong ranges. Ambiguous local times select the earlier offset. A generated recurrence in a DST gap is skipped.
+
+## Phase 3: Canvas cache (schema v3)
+
+`canvas_courses` and `canvas_assignments` are keyed by instance, Canvas user and remote object identifiers. Assignment rows keep the remote submission state, deadline, course/title/description and last sync time alongside `local_completed`, which is user-owned and retained across remote upserts. `canvas_sync_state` records sync status and counts. Credentials are excluded from all SQLite tables: only the selected instance origin is in `app_settings`; the token is in Windows Credential Manager. Cached Canvas assignments are read-only remote records apart from the local completion flag.
