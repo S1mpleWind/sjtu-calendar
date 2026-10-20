@@ -93,3 +93,11 @@
 - Change: the calendar toolbar's refresh arrow now has the visible label “刷新 Canvas 作业”. Clicking it runs the Canvas assignment sync and then reloads the local calendar cache. When no Canvas connection is configured, clicking it opens Settings with a clear connection prompt.
 - Verification: `pnpm lint` passed; `pnpm test` passed (12 tests), including coverage for the label and the connected `sync_canvas` invocation; `pnpm build` passed.
 - Live account sync: not performed; it requires the user's saved Canvas credentials.
+
+## First Windows release — v0.1.0
+
+- Date: 2026-10-20 (Asia/Singapore).
+- README: added the user-provided calendar overview and Canvas assignment screenshots from `assets/`, plus a GitHub Releases download link.
+- Package: rebuilt the x64 NSIS installer after the Canvas refresh label change. `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe`, 3,502,777 bytes; SHA-256 `E5982AA1708A08DD977A2A18E7F4FEA76FEBA6B042176993F199BE30749E90CC`.
+- Verification: `pnpm lint`, `pnpm test` (12 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (20 passed), and `pnpm tauri build` passed. The Windows linker emitted its import-library creation warning; packaging completed successfully.
+- Manual review: the user confirmed manual review is complete before release.

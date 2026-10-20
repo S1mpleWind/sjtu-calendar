@@ -71,3 +71,9 @@
 - [x] Calendar toolbar refresh control visibly says “刷新 Canvas 作业” and calls the real `sync_canvas` command when Canvas is connected.
 - [x] When Canvas is not connected, the control opens Settings and explains that a connection is needed before assignments can be refreshed.
 - [ ] Live Canvas refresh requires the user's saved Canvas credentials and remains an account-level acceptance step.
+
+## First Windows release — v0.1.0
+
+- [x] User confirmed manual review is complete before release.
+- [x] Rebuilt the x64 NSIS installer and verified the build completed successfully.
+- [x] README includes both user-provided screenshots and points to the GitHub latest release page.

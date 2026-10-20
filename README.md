@@ -2,6 +2,16 @@
 
 本地优先的 Windows 日历应用，使用 Tauri 2、React、TypeScript、Rust 和 SQLite。当前包含个人日程及重复事件、周/月日历、Canvas 作业缓存、SJTU 课程缓存，以及明确标记为本地个人日程的 ICS 课表导入。Widget 暂不属于主窗口版本。
 
+## 应用预览
+
+![SJTU Schedule 周视图，展示课程表和 Canvas 作业](assets/image.png)
+
+![日历下方的 Canvas 作业截止列表](assets/image-canvas-task.png)
+
+## 下载 Windows 版本
+
+从 [GitHub Releases](https://github.com/S1mpleWind/sjtu-calendar/releases/latest) 下载最新的 x64 Windows 安装包。
+
 ## Windows 开发环境
 
 - Windows 10/11 x64、Node.js 22、pnpm 10
