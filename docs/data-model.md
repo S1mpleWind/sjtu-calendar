@@ -20,6 +20,8 @@ Rust owns validation, RRULE expansion, exception application and SQLite access. 
 
 `academic_terms` stores the source-specific academic year/term, manually supplied first teaching-week Monday, week count and `Asia/Shanghai` timezone. `sjtu_courses` uses `(term_id, source_system, external_id)` as its natural unique key. `course_meetings` separates multiple weekdays/sections/weeks/rooms for a course; week numbers are explicit JSON arrays, and stable IDs make sync repeatable. `sjtu_sync_state` records complete or partial applies. Credentials are not stored in SQLite.
 
+Schema v6 adds `course_occurrence_notes`, keyed by meeting and teaching week. A note belongs to one dated class occurrence and survives schedule refreshes; clearing the note deletes only that occurrence's row.
+
 ## Phase 4 fallback: ICS imports (schema v5)
 
 `personal_events.import_source` and `import_key` mark events created by an ICS import. A partial unique index prevents duplicate active occurrences for a source. Replacing a source soft-deletes its prior occurrences and inserts the previewed set in one transaction; imported records remain local personal events and do not populate `sjtu_sync_state`. The original ICS content is not persisted. Database backup exports a checkpointed SQLite image in a versioned JSON envelope; restore validates SHA-256 and SQLite integrity before migration and file replacement. Credential Manager entries are outside the database.

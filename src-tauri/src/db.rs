@@ -6,6 +6,8 @@ const PERSONAL_EVENTS_MIGRATION: &str = include_str!("../migrations/0002_persona
 const CANVAS_CACHE_MIGRATION: &str = include_str!("../migrations/0003_canvas_cache.sql");
 const SJTU_SCHEDULE_MIGRATION: &str = include_str!("../migrations/0004_sjtu_schedule.sql");
 const ICS_IMPORT_MIGRATION: &str = include_str!("../migrations/0005_ics_import.sql");
+const SJTU_OCCURRENCE_NOTES_MIGRATION: &str =
+    include_str!("../migrations/0006_sjtu_occurrence_notes.sql");
 
 pub fn initialize_database(path: &Path) -> rusqlite::Result<i64> {
     let mut connection = Connection::open(path)?;
@@ -28,6 +30,7 @@ pub(super) fn apply_migrations(connection: &mut Connection) -> rusqlite::Result<
         (3, CANVAS_CACHE_MIGRATION),
         (4, SJTU_SCHEDULE_MIGRATION),
         (5, ICS_IMPORT_MIGRATION),
+        (6, SJTU_OCCURRENCE_NOTES_MIGRATION),
     ] {
         let applied = connection
             .query_row(
@@ -62,14 +65,14 @@ mod tests {
     use rusqlite::Connection;
 
     #[test]
-    fn migrations_upgrade_to_v5_once_and_preserve_default_timezone() {
+    fn migrations_upgrade_to_v6_once_and_preserve_default_timezone() {
         let mut connection = Connection::open_in_memory().expect("open in-memory database");
 
         assert_eq!(
             apply_migrations(&mut connection).expect("apply initial migration"),
-            5
+            6
         );
-        assert_eq!(apply_migrations(&mut connection).expect("apply again"), 5);
+        assert_eq!(apply_migrations(&mut connection).expect("apply again"), 6);
 
         let timezone: String = connection
             .query_row(
@@ -92,7 +95,7 @@ mod tests {
                 row.get(0)
             })
             .expect("count migrations");
-        assert_eq!(migration_count, 5);
+        assert_eq!(migration_count, 6);
         connection
             .query_row("SELECT COUNT(*) FROM recurrence_exceptions", [], |row| {
                 row.get::<_, i64>(0)
@@ -108,5 +111,10 @@ mod tests {
                 row.get::<_, i64>(0)
             })
             .expect("v4 course meetings table exists");
+        connection
+            .query_row("SELECT COUNT(*) FROM course_occurrence_notes", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .expect("v6 occurrence notes table exists");
     }
 }

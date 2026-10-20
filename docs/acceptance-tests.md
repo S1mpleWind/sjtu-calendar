@@ -56,3 +56,11 @@
 - [x] `pnpm lint`, `pnpm test` (9 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (20 passed).
 - [x] `pnpm tauri build` produces an NSIS x64 installer at `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3.34 MiB).
 - [ ] Manual install/uninstall, packaged WebView sign-in, app restart, backup download/restore UI and persistence review.
+
+## Follow-up — SJTU term dates and class notes
+
+- [x] Verified academic terms prefill their first Monday and week count; unknown terms are not guessed. Unit coverage includes supported dates and an unsupported year.
+- [x] A single class occurrence note persists through an idempotent schedule refresh and does not appear on later weeks of the same meeting.
+- [x] Course detail note editor invokes the secure Tauri command; saving a note renders the star indicator.
+- [x] `cargo fmt --check`, `cargo test` (20 passed), `pnpm lint`, `pnpm test` (11 passed), `pnpm build`, and `pnpm tauri build` passed.
+- [ ] Native window visual review and live authenticated timetable comparison remain for user acceptance.

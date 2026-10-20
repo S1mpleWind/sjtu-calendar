@@ -2,7 +2,7 @@ use chrono::{Datelike, NaiveDate, NaiveTime, TimeZone, Utc};
 use keyring::Entry;
 use regex::Regex;
 use reqwest::{Client, StatusCode, Url, header};
-use rusqlite::{Connection, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::BTreeSet, path::Path, str::FromStr, time::Duration};
@@ -45,6 +45,7 @@ pub struct SjtuSyncResult {
 #[serde(rename_all = "camelCase")]
 pub struct SjtuCourseOccurrence {
     pub occurrence_id: String,
+    pub meeting_id: String,
     pub course_id: String,
     pub term_id: String,
     pub source_system: String,
@@ -59,6 +60,7 @@ pub struct SjtuCourseOccurrence {
     pub weekday: i64,
     pub start_section: i64,
     pub end_section: i64,
+    pub note: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,22 +130,27 @@ pub fn start_login(app: &AppHandle, system: &str) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(&label) {
         window
             .set_focus()
-            .map_err(|_| "无法聚焦教务登录窗口".to_string())?;
+            .map_err(|error| format!("无法聚焦教务登录窗口：{error}"))?;
         return Ok(());
     }
     let url = Url::parse(start_url).map_err(|_| "教务登录地址配置无效".to_string())?;
-    let cache_dir = app
-        .path()
-        .app_cache_dir()
-        .map_err(|_| "无法初始化临时登录会话".to_string())?
-        .join(&label);
-    std::fs::create_dir_all(&cache_dir).map_err(|_| "无法初始化临时登录会话".to_string())?;
     let window = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
-        .data_directory(cache_dir)
+        .incognito(true)
         .title(title)
         .inner_size(980.0, 720.0)
+        .on_page_load(|_, _payload| {
+            #[cfg(debug_assertions)]
+            {
+                let event = match _payload.event() {
+                    tauri::webview::PageLoadEvent::Started => "started",
+                    tauri::webview::PageLoadEvent::Finished => "finished",
+                };
+                let host = _payload.url().host_str().unwrap_or("unknown");
+                eprintln!("SJTU login page {event}: {host}");
+            }
+        })
         .build()
-        .map_err(|_| "无法打开教务登录窗口".to_string())?;
+        .map_err(|error| format!("无法打开教务登录窗口：{error}"))?;
     let cleanup_window = window.clone();
     window.on_window_event(move |event| {
         if let WindowEvent::CloseRequested { api, .. } = event {
@@ -818,7 +825,7 @@ pub async fn course_occurrences(
     let timezone =
         chrono_tz::Tz::from_str(display_timezone).map_err(|_| "显示时区无效".to_string())?;
     let connection = Connection::open(path).map_err(db_error)?;
-    let mut statement = connection.prepare("SELECT c.id,t.id,t.source_system,c.name,c.teacher,c.color,t.start_date,t.week_count,m.weekday,m.start_section,m.end_section,m.start_local_time,m.end_local_time,m.timezone,m.week_numbers_json,m.location FROM course_meetings m JOIN sjtu_courses c ON c.id=m.course_id JOIN academic_terms t ON t.id=c.term_id WHERE c.archived=0 AND m.archived=0 AND t.is_active=1 ORDER BY t.start_date,m.weekday,m.start_section").map_err(db_error)?;
+    let mut statement = connection.prepare("SELECT c.id,t.id,t.source_system,c.name,c.teacher,c.color,t.start_date,t.week_count,m.weekday,m.start_section,m.end_section,m.start_local_time,m.end_local_time,m.timezone,m.week_numbers_json,m.location,m.id FROM course_meetings m JOIN sjtu_courses c ON c.id=m.course_id JOIN academic_terms t ON t.id=c.term_id WHERE c.archived=0 AND m.archived=0 AND t.is_active=1 ORDER BY t.start_date,m.weekday,m.start_section").map_err(db_error)?;
     let rows = statement
         .query_map([], |row| {
             Ok((
@@ -838,6 +845,7 @@ pub async fn course_occurrences(
                 row.get::<_, String>(13)?,
                 row.get::<_, String>(14)?,
                 row.get::<_, String>(15)?,
+                row.get::<_, String>(16)?,
             ))
         })
         .map_err(db_error)?;
@@ -860,6 +868,7 @@ pub async fn course_occurrences(
             term_zone,
             weeks_json,
             location,
+            meeting_id,
         ) = row.map_err(db_error)?;
         let term_start = NaiveDate::parse_from_str(&start_date, "%Y-%m-%d")
             .map_err(|_| "已保存的学期首日无效".to_string())?;
@@ -896,6 +905,7 @@ pub async fn course_occurrences(
             }
             results.push(SjtuCourseOccurrence {
                 occurrence_id: format!("{course_id}:{week}:{weekday}:{start_section}"),
+                meeting_id: meeting_id.clone(),
                 course_id: course_id.clone(),
                 term_id: term_id.clone(),
                 source_system: source_system.clone(),
@@ -910,11 +920,52 @@ pub async fn course_occurrences(
                 weekday,
                 start_section,
                 end_section,
+                note: connection.query_row(
+                    "SELECT note FROM course_occurrence_notes WHERE meeting_id=?1 AND week_number=?2",
+                    params![meeting_id, week as i64],
+                    |note_row| note_row.get(0),
+                ).optional().map_err(db_error)?.unwrap_or_default(),
             });
         }
     }
     results.sort_by(|a, b| a.start_utc.cmp(&b.start_utc));
     Ok(results)
+}
+
+pub fn set_occurrence_note(
+    path: &Path,
+    meeting_id: &str,
+    week_number: i64,
+    note: &str,
+) -> Result<(), String> {
+    let note = note.trim();
+    if meeting_id.is_empty() || !(1..=24).contains(&week_number) || note.chars().count() > 2000 {
+        return Err("课程备注无效（最多 2000 字）".into());
+    }
+    let mut connection = Connection::open(path).map_err(db_error)?;
+    let transaction = connection.transaction().map_err(db_error)?;
+    let exists: bool = transaction
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM course_meetings WHERE id=?1 AND archived=0)",
+            params![meeting_id],
+            |row| row.get(0),
+        )
+        .map_err(db_error)?;
+    if !exists {
+        return Err("这节课已不存在或已归档".into());
+    }
+    if note.is_empty() {
+        transaction
+            .execute(
+                "DELETE FROM course_occurrence_notes WHERE meeting_id=?1 AND week_number=?2",
+                params![meeting_id, week_number],
+            )
+            .map_err(db_error)?;
+    } else {
+        let updated_at = Utc::now().to_rfc3339();
+        transaction.execute("INSERT INTO course_occurrence_notes(meeting_id,week_number,note,updated_at) VALUES(?1,?2,?3,?4) ON CONFLICT(meeting_id,week_number) DO UPDATE SET note=excluded.note,updated_at=excluded.updated_at", params![meeting_id, week_number, note, updated_at]).map_err(db_error)?;
+    }
+    transaction.commit().map_err(db_error)
 }
 
 #[cfg(test)]
@@ -1036,6 +1087,44 @@ mod tests {
         assert_eq!(occurrences.len(), 2);
         assert_eq!(occurrences[0].week_number, 1);
         assert_eq!(occurrences[0].start_utc, "2026-10-19T00:00:00+00:00");
+        set_occurrence_note(
+            &path,
+            &occurrences[0].meeting_id,
+            occurrences[0].week_number,
+            "带实验报告",
+        )
+        .unwrap();
+        apply_sync(
+            &path,
+            "undergraduate",
+            "2026",
+            "1",
+            "2026-10-19",
+            16,
+            term_id,
+            &parsed,
+            "succeeded",
+            2,
+        )
+        .unwrap();
+        let annotated = course_occurrences(&path, "2026-10-19", "2026-10-25", "Asia/Shanghai")
+            .await
+            .unwrap();
+        assert_eq!(
+            annotated
+                .iter()
+                .find(|item| item.meeting_id == occurrences[0].meeting_id)
+                .unwrap()
+                .note,
+            "带实验报告"
+        );
+        let following_week = course_occurrences(&path, "2026-10-26", "2026-11-01", "Asia/Shanghai")
+            .await
+            .unwrap();
+        assert!(
+            following_week.iter().all(|item| item.note.is_empty()),
+            "one occurrence note must not leak to later weeks"
+        );
         let connection = Connection::open(&path).unwrap();
         let (active_courses, active_meetings, all_meetings): (i64, i64, i64) = connection.query_row(
             "SELECT (SELECT COUNT(*) FROM sjtu_courses WHERE archived=0),(SELECT COUNT(*) FROM course_meetings WHERE archived=0),(SELECT COUNT(*) FROM course_meetings)", [],

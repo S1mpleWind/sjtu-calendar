@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   createPersonalEvent, deletePersonalEvent, getBackendStatus, getCalendarOccurrences, getCanvasConnectionStatus, getCanvasDeadlines, setCanvasAssignmentCompleted, saveCanvasCredentials, clearCanvasCredentials, testCanvasConnection, syncCanvas,
-  getSjtuConnectionStatus, getSjtuCourseOccurrences, startSjtuLogin, finishSjtuLogin, clearSjtuLogin, syncSjtu,
+  getSjtuConnectionStatus, getSjtuCourseOccurrences, setSjtuOccurrenceNote, startSjtuLogin, finishSjtuLogin, clearSjtuLogin, syncSjtu,
   previewIcsImport, applyIcsImport, type IcsPreview,
   exportDataBackup, restoreDataBackup,
   getPersonalEvent, listPersonalEvents, setRecurrenceException, updatePersonalEvent,
@@ -66,6 +66,15 @@ function timeLabel(item: CalendarOccurrence, timezone: string) {
   const start = new Intl.DateTimeFormat("zh-CN", format).format(new Date(item.startUtc));
   const end = new Intl.DateTimeFormat("zh-CN", format).format(new Date(item.endUtc));
   return `${start}–${end}`;
+}
+export function suggestSjtuTermMetadata(year: string, term: "1" | "2" | "3") {
+  const verified: Record<string, { firstMonday: string; weekCount: number }> = {
+    "2026-1": { firstMonday: "2026-09-14", weekCount: 18 },
+    "2025-1": { firstMonday: "2025-09-15", weekCount: 18 },
+    "2025-2": { firstMonday: "2026-03-02", weekCount: 18 },
+    "2024-3": { firstMonday: "2025-06-23", weekCount: 4 },
+  };
+  return verified[`${year}-${term}`] ?? null;
 }
 function localNow(timezone: string, date: string) {
   const now = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
@@ -294,6 +303,11 @@ function App() {
     await refresh();
   }
 
+  async function saveCourseOccurrenceNote(course: SjtuCourseOccurrence, note: string) {
+    await setSjtuOccurrenceNote(course.meetingId, course.weekNumber, note);
+    await refresh();
+  }
+
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
       if (event.defaultPrevented || event.altKey || !(event.ctrlKey || event.metaKey)) return;
@@ -362,7 +376,7 @@ function App() {
       </>}
     </section>
     {editor && <EventEditor key={`${editor.event?.id ?? "new"}-${editor.occurrence?.occurrenceId ?? editor.date}`} editor={editor} timezone={timezone} busy={busy} onClose={() => setEditor(null)} onSave={saveItem} onDelete={removeItem} />}
-    {selectedCourse && <CourseDetails course={selectedCourse} onClose={() => setSelectedCourse(null)} />}
+    {selectedCourse && <CourseDetails course={selectedCourse} onSaveNote={saveCourseOccurrenceNote} onClose={() => setSelectedCourse(null)} />}
   </main>;
 }
 
@@ -402,11 +416,13 @@ function SjtuSettings({ status, notice, onStart, onFinish, onDisconnect, onSync 
   const [source, setSource] = useState<"undergraduate" | "graduate">("undergraduate");
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [term, setTerm] = useState<"1" | "2" | "3">("1");
-  const [startDate, setStartDate] = useState("");
-  const [weekCount, setWeekCount] = useState(16);
+  const initialSuggestion = suggestSjtuTermMetadata(String(new Date().getFullYear()), "1");
+  const [startDate, setStartDate] = useState(initialSuggestion?.firstMonday ?? "");
+  const [weekCount, setWeekCount] = useState(initialSuggestion?.weekCount ?? 16);
   const [working, setWorking] = useState(false);
   const [problem, setProblem] = useState("");
   const configured = source === "undergraduate" ? status.undergraduateConfigured : status.graduateConfigured;
+  const suggestion = suggestSjtuTermMetadata(year, term);
   async function run(action: () => Promise<void>) {
     setWorking(true); setProblem("");
     try { await action(); } catch (reason) { setProblem(reason instanceof Error ? reason.message : "教务操作失败"); }
@@ -415,9 +431,9 @@ function SjtuSettings({ status, notice, onStart, onFinish, onDisconnect, onSync 
   return <section className="settings-panel sjtu-settings"><div className="settings-title"><div className="settings-icon">SJ</div><div><h2>SJTU 教务课表</h2><p>登录由你在独立的交大页面中完成；会话保存在 Windows Credential Manager。</p></div><span className={`connection-pill ${configured ? "connected" : ""}`}>{configured ? "已保存会话" : "未登录"}</span></div>
     <label className="form-field"><span>教务系统</span><select value={source} onChange={(event) => setSource(event.target.value as typeof source)}><option value="undergraduate">本科生教务</option><option value="graduate">研究生教务</option></select></label>
     <div className="settings-actions"><button className="cancel-button" disabled={working} onClick={() => void run(() => onStart(source))} type="button">打开交大登录窗口</button><button className="cancel-button" disabled={working} onClick={() => void run(() => onFinish(source))} type="button">保存登录会话</button><button className="delete-button" disabled={working || !configured} onClick={() => void run(() => onDisconnect(source))} type="button">断开教务</button></div>
-    <div className="form-two sjtu-term-fields"><label className="form-field"><span>学年起始年份</span><input inputMode="numeric" value={year} onChange={(event) => setYear(event.target.value)} /></label><label className="form-field"><span>学期</span><select value={term} onChange={(event) => setTerm(event.target.value as typeof term)}><option value="1">秋季（学年第一学期）</option><option value="2">春季（学年第二学期）</option><option value="3">夏季（学年第三学期）</option></select></label></div>
+    <div className="form-two sjtu-term-fields"><label className="form-field"><span>学年起始年份</span><input inputMode="numeric" value={year} onChange={(event) => { const next = event.target.value; setYear(next); const nextSuggestion = suggestSjtuTermMetadata(next, term); setStartDate(nextSuggestion?.firstMonday ?? ""); if (nextSuggestion) setWeekCount(nextSuggestion.weekCount); }} /></label><label className="form-field"><span>学期</span><select value={term} onChange={(event) => { const next = event.target.value as typeof term; setTerm(next); const nextSuggestion = suggestSjtuTermMetadata(year, next); setStartDate(nextSuggestion?.firstMonday ?? ""); if (nextSuggestion) setWeekCount(nextSuggestion.weekCount); }}>{/* options */}<option value="1">秋季（学年第一学期）</option><option value="2">春季（学年第二学期）</option><option value="3">夏季（学年第三学期）</option></select></label></div>
     <div className="form-two sjtu-term-fields"><label className="form-field"><span>第 1 教学周的周一</span><input type="date" required value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label><label className="form-field"><span>教学周数（1–24）</span><input type="number" min={1} max={24} value={weekCount} onChange={(event) => setWeekCount(Number(event.target.value))} /></label></div>
-    <p className="settings-help">教务数据只提供周次与节次，不含可确认的学期首日。请填写该学期第一周周一和教学周数；课程时间按已审阅参考源码中的交大节次表映射。</p>
+    <p className="settings-help">{suggestion ? `已根据上海交大教务处公告预填第 1 周周一和 ${suggestion.weekCount} 周；如你的校区或培养方案不同，可在同步前修改。` : "该学期暂无已核实的校历日期；请选择教务处公布的第 1 周周一。"} 课程时间按交大节次表映射。</p>
     <button className="save-button" disabled={working || !configured || !startDate || !year.trim()} onClick={() => void run(() => onSync(source, year, term, startDate, weekCount))} type="button">刷新课表</button>
     {problem && <div className="error-banner" role="alert">{problem}</div>}{notice && <p className="settings-feedback" role="status">{notice}</p>}
   </section>;
@@ -489,9 +505,18 @@ function BackupSettings({ onRestored }: { onRestored: () => Promise<void> }) {
   </section>;
 }
 
-function CourseDetails({ course, onClose }: { course: SjtuCourseOccurrence; onClose: () => void }) {
+function CourseDetails({ course, onClose, onSaveNote }: { course: SjtuCourseOccurrence; onClose: () => void; onSaveNote: (course: SjtuCourseOccurrence, note: string) => Promise<void> }) {
+  const [note, setNote] = useState(course.note);
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteMessage, setNoteMessage] = useState("");
   const timeFormat: Intl.DateTimeFormatOptions = { timeZone: course.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="event-modal course-details" role="dialog" aria-modal="true" aria-labelledby="course-details-title"><header className="modal-header"><div><p className="eyebrow">{course.sourceSystem === "undergraduate" ? "本科教务" : "研究生教务"} · 第 {course.weekNumber} 周</p><h2 id="course-details-title">{course.title}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header><div className="form-scroll"><p><strong>时间：</strong>{new Intl.DateTimeFormat("zh-CN", { ...timeFormat, weekday: "long", month: "long", day: "numeric" }).format(new Date(course.startUtc))} · {new Intl.DateTimeFormat("zh-CN", timeFormat).format(new Date(course.startUtc))}–{new Intl.DateTimeFormat("zh-CN", timeFormat).format(new Date(course.endUtc))}</p><p><strong>地点：</strong>{course.location || "未提供"}</p><p><strong>教师：</strong>{course.teacher || "未提供"}</p><p><strong>节次：</strong>第 {course.startSection}–{course.endSection} 节</p></div><footer className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>关闭</button></footer></section></div>;
+  async function saveNote() {
+    setSavingNote(true); setNoteMessage("");
+    try { await onSaveNote(course, note); setNoteMessage(note.trim() ? "备注已保存" : "备注已移除"); }
+    catch { setNoteMessage("保存失败，请重试"); }
+    finally { setSavingNote(false); }
+  }
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="event-modal course-details" role="dialog" aria-modal="true" aria-labelledby="course-details-title"><header className="modal-header"><div><p className="eyebrow">{course.sourceSystem === "undergraduate" ? "本科教务" : "研究生教务"} · 第 {course.weekNumber} 周</p><h2 id="course-details-title">{course.title}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header><div className="form-scroll"><p><strong>时间：</strong>{new Intl.DateTimeFormat("zh-CN", { ...timeFormat, weekday: "long", month: "long", day: "numeric" }).format(new Date(course.startUtc))} · {new Intl.DateTimeFormat("zh-CN", timeFormat).format(new Date(course.startUtc))}–{new Intl.DateTimeFormat("zh-CN", timeFormat).format(new Date(course.endUtc))}</p><p><strong>地点：</strong>{course.location || "未提供"}</p><p><strong>教师：</strong>{course.teacher || "未提供"}</p><p><strong>节次：</strong>第 {course.startSection}–{course.endSection} 节</p><label className="form-field course-note-field"><span>本次课的备注</span><textarea aria-label="本次课的备注" maxLength={2000} rows={4} value={note} onChange={(event) => setNote(event.target.value)} placeholder="例如：带实验报告、去办公室答疑" /></label>{noteMessage && <p role="status" className="settings-feedback">{noteMessage}</p>}</div><footer className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>关闭</button><button className="save-button" type="button" disabled={savingNote} onClick={() => void saveNote()}>{savingNote ? "保存中…" : "保存备注"}</button></footer></section></div>;
 }
 
 function intervalLabel(startUtc: string, endUtc: string, timezone: string) {
@@ -520,7 +545,8 @@ function WeekView({ days, grouped, coursesByDay, selectedDate, today, timezone, 
         const height = Math.max(27, Math.min(HOUR_HEIGHT * (LAST_HOUR - FIRST_HOUR) - top, hours * HOUR_HEIGHT));
         const position = overlapLayout.get(item.occurrenceId) ?? { column: 0, columns: 1 };
         const isCourse = "courseId" in item;
-        return <button className={`event-block ${isCourse ? "course-block" : ""}`} style={{ top: `${Math.max(0, top)}px`, height: `${height}px`, left: `calc(${position.column * 100 / position.columns}% + 3px)`, right: `calc(${(position.columns - position.column - 1) * 100 / position.columns}% + 3px)`, borderLeftColor: item.color }} key={item.occurrenceId} onClick={() => isCourse ? onOpenCourse(item) : onOpen(item)} type="button"><strong>{item.title}</strong><span>{isCourse ? intervalLabel(item.startUtc, item.endUtc, timezone) : timeLabel(item, timezone)}</span>{height > 54 && item.location && <small>{item.location}</small>}{isCourse && height > 74 && item.teacher && <small>{item.teacher}</small>}</button>;
+        const hasNote = "courseId" in item && item.note.length > 0;
+        return <button className={`event-block ${isCourse ? "course-block" : ""}`} style={{ top: `${Math.max(0, top)}px`, height: `${height}px`, left: `calc(${position.column * 100 / position.columns}% + 3px)`, right: `calc(${(position.columns - position.column - 1) * 100 / position.columns}% + 3px)`, borderLeftColor: item.color }} key={item.occurrenceId} onClick={() => isCourse ? onOpenCourse(item) : onOpen(item)} type="button">{hasNote && <span className="course-note-star" aria-label="含备注">★</span>}<strong>{item.title}</strong><span>{isCourse ? intervalLabel(item.startUtc, item.endUtc, timezone) : timeLabel(item, timezone)}</span>{height > 54 && item.location && <small>{item.location}</small>}{isCourse && height > 74 && item.teacher && <small>{item.teacher}</small>}</button>;
       })}</div>;
     })}</div></div>
     <div className="deadline-row"><div className="deadline-label">全天 / DDL</div>{days.map((day) => { const items = (grouped.get(day) ?? []).filter((item) => item.category === "deadline" || item.allDay); return <div className="deadline-cell" key={day} onDoubleClick={() => onNew(day)}>{items.length ? items.map((item) => <button key={item.occurrenceId} className={`deadline-chip ${item.category === "deadline" ? "deadline" : "all-day"}`} onClick={() => onOpen(item)} type="button"><span>{item.category === "deadline" ? "◆" : "●"}</span>{item.title}</button>) : <button className="add-inline" onClick={() => onNew(day)} aria-label={`${day} 新建日程`} type="button">＋</button>}</div>; })}</div>
@@ -536,7 +562,7 @@ function MonthView({ days, grouped, coursesByDay, selectedDate, today, selectedM
     const courses = coursesByDay.get(day) ?? [];
     const visibleLocal = items.slice(0, 3);
     const visibleCourses = courses.slice(0, Math.max(0, 3 - visibleLocal.length));
-    return <div role="button" tabIndex={0} className={`month-cell ${day.slice(5, 7) !== selectedMonth ? "outside" : ""} ${day === selectedDate ? "chosen" : ""} ${day === today ? "is-today" : ""}`} key={day} onClick={() => onSelectDate(day)} onDoubleClick={() => onNew(day)} onKeyDown={(event) => { if (event.key === "Enter") onSelectDate(day); }}><span className="month-date">{Number(day.slice(-2))}</span>{visibleLocal.map((item) => <button key={item.occurrenceId} className={`month-event ${item.category === "deadline" ? "deadline" : ""}`} style={{ borderLeftColor: item.color }} onClick={(event) => { event.stopPropagation(); onOpen(item); }} type="button">{item.title}</button>)}{visibleCourses.map((item) => <button key={item.occurrenceId} className="month-event course-month-event" style={{ borderLeftColor: item.color }} onClick={(event) => { event.stopPropagation(); onOpenCourse(item); }} type="button">{item.title}</button>)}{items.length + courses.length > 3 && <small className="more-events">+{items.length + courses.length - 3} 项</small>}</div>;
+    return <div role="button" tabIndex={0} className={`month-cell ${day.slice(5, 7) !== selectedMonth ? "outside" : ""} ${day === selectedDate ? "chosen" : ""} ${day === today ? "is-today" : ""}`} key={day} onClick={() => onSelectDate(day)} onDoubleClick={() => onNew(day)} onKeyDown={(event) => { if (event.key === "Enter") onSelectDate(day); }}><span className="month-date">{Number(day.slice(-2))}</span>{visibleLocal.map((item) => <button key={item.occurrenceId} className={`month-event ${item.category === "deadline" ? "deadline" : ""}`} style={{ borderLeftColor: item.color }} onClick={(event) => { event.stopPropagation(); onOpen(item); }} type="button">{item.title}</button>)}{visibleCourses.map((item) => <button key={item.occurrenceId} className="month-event course-month-event" style={{ borderLeftColor: item.color }} onClick={(event) => { event.stopPropagation(); onOpenCourse(item); }} type="button">{item.note && <span className="month-course-star" aria-label="含备注">★</span>}{item.title}</button>)}{items.length + courses.length > 3 && <small className="more-events">+{items.length + courses.length - 3} 项</small>}</div>;
   })}</div></section>;
 }
 

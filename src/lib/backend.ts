@@ -19,6 +19,7 @@ export interface SjtuCourseOccurrence {
   occurrenceId: string; courseId: string; termId: string; sourceSystem: string; title: string;
   teacher: string; location: string; startUtc: string; endUtc: string; timezone: string;
   color: string; weekNumber: number; weekday: number; startSection: number; endSection: number;
+  meetingId: string; note: string;
 }
 
 export interface IcsPreview {
@@ -143,6 +144,8 @@ export const syncSjtu = (sourceSystem: "undergraduate" | "graduate", academicYea
   invoke<SjtuSyncResult>("sync_sjtu", { sourceSystem, academicYear, termCode, startDate, weekCount });
 export const getSjtuCourseOccurrences = (fromDate: string, toDate: string, displayTimezone: string) =>
   invoke<SjtuCourseOccurrence[]>("get_sjtu_course_occurrences", { fromDate, toDate, displayTimezone });
+export const setSjtuOccurrenceNote = (meetingId: string, weekNumber: number, note: string) =>
+  invoke<void>("set_sjtu_occurrence_note", { meetingId, weekNumber, note });
 export const previewIcsImport = (content: string, sourceName: string, firstMonday: string, weekCount: number) =>
   invoke<IcsPreview>("preview_ics_import", { content, sourceName, firstMonday, weekCount });
 export const applyIcsImport = (content: string, sourceName: string, firstMonday: string, weekCount: number, replaceSource: boolean) =>

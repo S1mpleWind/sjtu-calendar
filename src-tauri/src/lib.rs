@@ -201,7 +201,7 @@ fn get_sjtu_connection_status() -> sjtu::SjtuConnectionStatus {
 }
 
 #[tauri::command]
-fn start_sjtu_login(app: tauri::AppHandle, source_system: String) -> Result<(), String> {
+async fn start_sjtu_login(app: tauri::AppHandle, source_system: String) -> Result<(), String> {
     sjtu::start_login(&app, &source_system)
 }
 
@@ -251,6 +251,16 @@ async fn get_sjtu_course_occurrences(
     .await
 }
 
+#[tauri::command]
+fn set_sjtu_occurrence_note(
+    state: State<'_, AppState>,
+    meeting_id: String,
+    week_number: i64,
+    note: String,
+) -> Result<(), String> {
+    sjtu::set_occurrence_note(&state.database_path, &meeting_id, week_number, &note)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -287,7 +297,8 @@ pub fn run() {
             finish_sjtu_login,
             clear_sjtu_login,
             sync_sjtu,
-            get_sjtu_course_occurrences
+            get_sjtu_course_occurrences,
+            set_sjtu_occurrence_note
         ])
         .run(tauri::generate_context!())
         .expect("failed to run SJTU Schedule");

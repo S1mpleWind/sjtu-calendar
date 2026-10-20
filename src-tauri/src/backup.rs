@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 const FORMAT: &str = "edu.sjtu.schedule.sqlite-backup.v1";
 const MAX_DATABASE_BYTES: usize = 64 * 1024 * 1024;
-const LATEST_SCHEMA: i64 = 5;
+const LATEST_SCHEMA: i64 = 6;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

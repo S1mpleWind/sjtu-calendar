@@ -27,6 +27,8 @@ The main window now renders local query results in week/month layouts and suppor
 
 When live account verification is unavailable, `src-tauri/src/ics.rs` provides a deliberately labeled import path. It previews and maps common single and weekly VEVENTs to a selected academic term, then stores their expanded instances as local personal events. Migration v5 tracks source filename and event identity for idempotency and replacement. It never records an imported file as an SJTU sync result.
 
+SJTU term suggestions are bundled only for terms whose first teaching Monday was verified from official SJTU notices; users can correct the date before sync. One-off class notes are stored by meeting and teaching week (schema v6), so they do not spill into other repetitions.
+
 ## Phase 5 update — release readiness
 
 `src-tauri/src/backup.rs` exports a versioned JSON envelope containing a checkpointed SQLite file, Base64 payload and SHA-256 checksum. Restore validates envelope/version/checksum and SQLite integrity, migrates a temporary database before replacing the live file, and keeps a pre-restore copy. Credential Manager secrets are outside SQLite and do not enter backups. The calendar exposes keyboard shortcuts for create, date navigation and view selection. User steps are in `docs/operations.md`.

@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import App from "./App";
+import App, { suggestSjtuTermMetadata } from "./App";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -12,7 +12,7 @@ describe("calendar window", () => {
     localStorage.clear();
     invoke.mockReset();
     invoke.mockImplementation((command: string) => {
-      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 5 });
+      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 6 });
       if (command === "get_canvas_deadlines") return Promise.resolve([]);
       if (command === "get_canvas_connection_status") return Promise.resolve({ configured: false, instanceUrl: null });
       if (command === "get_sjtu_course_occurrences") return Promise.resolve([]);
@@ -26,7 +26,7 @@ describe("calendar window", () => {
     render(<App />);
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("get_calendar_occurrences", expect.objectContaining({ displayTimezone: "Asia/Shanghai" })));
     expect(await screen.findByRole("region", { name: "周日历" })).toBeInTheDocument();
-    expect(await screen.findByText("本地 SQLite · v5")).toBeInTheDocument();
+    expect(await screen.findByText("本地 SQLite · v6")).toBeInTheDocument();
   });
 
   it("opens an editor and persists a new local event through Tauri", async () => {
@@ -59,7 +59,7 @@ describe("calendar window", () => {
     const date = `${part("year")}-${part("month")}-${part("day")}`;
     const instant = (time: string) => new Date(`${date}T${time}+08:00`).toISOString();
     invoke.mockImplementation((command: string) => {
-      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 5 });
+      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 6 });
       if (command === "get_canvas_deadlines") return Promise.resolve([]);
       if (command === "get_canvas_connection_status") return Promise.resolve({ configured: false, instanceUrl: null });
       if (command === "get_sjtu_course_occurrences") return Promise.resolve([]);
@@ -101,7 +101,7 @@ describe("calendar window", () => {
   it("previews an ICS course file with an explicit term mapping", async () => {
     const user = userEvent.setup();
     invoke.mockImplementation((command: string) => {
-      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 5 });
+      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 6 });
       if (command === "get_canvas_deadlines") return Promise.resolve([]);
       if (command === "get_canvas_connection_status") return Promise.resolve({ configured: false, instanceUrl: null });
       if (command === "get_sjtu_course_occurrences") return Promise.resolve([]);
@@ -125,13 +125,13 @@ describe("calendar window", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const backup = '{"format":"edu.sjtu.schedule.sqlite-backup.v1"}';
     invoke.mockImplementation((command: string) => {
-      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 5 });
+      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 6 });
       if (command === "get_canvas_deadlines") return Promise.resolve([]);
       if (command === "get_canvas_connection_status") return Promise.resolve({ configured: false, instanceUrl: null });
       if (command === "get_sjtu_course_occurrences") return Promise.resolve([]);
       if (command === "get_sjtu_connection_status") return Promise.resolve({ undergraduateConfigured: false, graduateConfigured: false });
       if (command === "get_calendar_occurrences" || command === "list_personal_events") return Promise.resolve([]);
-      if (command === "restore_data_backup") return Promise.resolve(5);
+      if (command === "restore_data_backup") return Promise.resolve(6);
       return Promise.resolve(null);
     });
     render(<App />);
@@ -140,7 +140,7 @@ describe("calendar window", () => {
     await user.click(screen.getByRole("button", { name: "验证并恢复备份" }));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("restore_data_backup", { backupJson: backup }));
     expect(confirm).toHaveBeenCalledOnce();
-    expect(await screen.findByText("恢复完成（数据库 v5）。外部账户凭据未包含在备份中。")).toBeInTheDocument();
+    expect(await screen.findByText("恢复完成（数据库 v6）。外部账户凭据未包含在备份中。")).toBeInTheDocument();
     confirm.mockRestore();
   });
 
@@ -149,5 +149,39 @@ describe("calendar window", () => {
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("get_backend_status"));
     await userEvent.keyboard("{Control>}n{/Control}");
     expect(await screen.findByRole("dialog", { name: "新建日程" })).toBeInTheDocument();
+  });
+
+  it("suggests only official verified SJTU term dates", () => {
+    expect(suggestSjtuTermMetadata("2026", "1")).toEqual({ firstMonday: "2026-09-14", weekCount: 18 });
+    expect(suggestSjtuTermMetadata("2025", "2")).toEqual({ firstMonday: "2026-03-02", weekCount: 18 });
+    expect(suggestSjtuTermMetadata("2030", "1")).toBeNull();
+  });
+
+  it("saves a note to one dated course occurrence and displays its star", async () => {
+    const user = userEvent.setup();
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+    const part = (type: string) => parts.find((entry) => entry.type === type)?.value ?? "2026";
+    const day = `${part("year")}-${part("month")}-${part("day")}`;
+    const item = {
+      occurrenceId: "course-week-one", meetingId: "meeting-test", courseId: "course-test", termId: "term-test", sourceSystem: "undergraduate",
+      title: "单节备注测试课", teacher: "教师", location: "教室", startUtc: new Date(`${day}T10:00:00+08:00`).toISOString(), endUtc: new Date(`${day}T10:45:00+08:00`).toISOString(),
+      timezone: "Asia/Shanghai", color: "#9b9bff", weekNumber: 1, weekday: 1, startSection: 1, endSection: 1, note: "",
+    };
+    invoke.mockImplementation((command: string) => {
+      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 6 });
+      if (command === "get_canvas_deadlines") return Promise.resolve([]);
+      if (command === "get_canvas_connection_status") return Promise.resolve({ configured: false, instanceUrl: null });
+      if (command === "get_sjtu_course_occurrences") return Promise.resolve([{ ...item }]);
+      if (command === "set_sjtu_occurrence_note") { item.note = "带讲义"; return Promise.resolve(null); }
+      if (command === "get_sjtu_connection_status") return Promise.resolve({ undergraduateConfigured: false, graduateConfigured: false });
+      if (command === "get_calendar_occurrences" || command === "list_personal_events") return Promise.resolve([]);
+      return Promise.resolve(null);
+    });
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: /单节备注测试课/ }));
+    await user.type(screen.getByRole("textbox", { name: "本次课的备注" }), "带讲义");
+    await user.click(screen.getByRole("button", { name: "保存备注" }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("set_sjtu_occurrence_note", { meetingId: "meeting-test", weekNumber: 1, note: "带讲义" }));
+    expect(await screen.findByLabelText("含备注")).toBeInTheDocument();
   });
 });

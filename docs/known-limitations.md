@@ -4,7 +4,7 @@
 
 - SJTU endpoints and response fields are `CONFIRMED_BY_SOURCE` only. No real SJTU account or live response has been verified. Follow the steps in `docs/integration-sjtu.md` before describing the connection as live-validated.
 - Saved SJTU cookies are read from an isolated login WebView and stored in Windows Credential Manager. The connection badge means only “session saved”; undergraduate session acceptance is checked by attempting the schedule request.
-- Academic term first-week Monday and teaching-week count must be supplied by the user because the inspected payload does not confirm them.
+- SJTU course payloads do not include academic term start dates. First-week dates are auto-filled only for terms verified from official notices and remain editable; other terms still need a date entered by the user.
 - ICS import is a fallback for standard one-off and weekly course VEVENTs. BYDAY/multiple weekday recurrence, EXDATE/RDATE, VTIMEZONE-only definitions and complex recurrence rules are rejected or unsupported; no previewed import is applied until the user chooses Apply.
 - Manual native-window login, Credential Manager cleanup, real SJTU schedule comparison, WebView resize/high-DPI review and Windows installer testing remain outstanding.
 - Phase 5 generated the NSIS x64 installer. Manual install/uninstall, packaged WebView, and persistence review are outstanding; backup/export and the operations guide are implemented.
