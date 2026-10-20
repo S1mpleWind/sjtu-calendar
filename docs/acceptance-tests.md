@@ -47,3 +47,12 @@
 - [x] ICS preview maps a weekly course to the selected term; apply/replacement is transactional, keeps one active copy per source and does not write SJTU sync status. Fixtures are test-only.
 - [x] `cargo fmt --check`, `cargo test` (17 tests), `pnpm lint`, `pnpm test` (7 UI tests), and `pnpm build` passed after final fixes.
 - [ ] Manual SJTU sign-in, first schedule sync, calendar comparison, disconnect/credential cleanup, and native WebView acceptance. See `docs/integration-sjtu.md`; no live verification is claimed.
+
+## Phase 5 — release and packaging
+
+- [x] Chinese user guide covers startup, keyboard shortcuts, external account sign-in, ICS fallback, offline cache and backup/restore.
+- [x] SQLite backup round trip restores event/cache bytes; checksum failure leaves the current database unchanged; restore validates integrity and preserves the pre-restore database.
+- [x] `THIRD-PARTY-NOTICES.md` records direct runtime dependency versions and licenses; reference source terms are stated without copying code.
+- [x] `pnpm lint`, `pnpm test` (9 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (20 passed).
+- [x] `pnpm tauri build` produces an NSIS x64 installer at `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3.34 MiB).
+- [ ] Manual install/uninstall, packaged WebView sign-in, app restart, backup download/restore UI and persistence review.

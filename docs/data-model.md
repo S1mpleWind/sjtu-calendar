@@ -22,4 +22,4 @@ Rust owns validation, RRULE expansion, exception application and SQLite access. 
 
 ## Phase 4 fallback: ICS imports (schema v5)
 
-`personal_events.import_source` and `import_key` mark events created by an ICS import. A partial unique index prevents duplicate active occurrences for a source. Replacing a source soft-deletes its prior occurrences and inserts the previewed set in one transaction; imported records remain local personal events and do not populate `sjtu_sync_state`. The original ICS content is not persisted.
+`personal_events.import_source` and `import_key` mark events created by an ICS import. A partial unique index prevents duplicate active occurrences for a source. Replacing a source soft-deletes its prior occurrences and inserts the previewed set in one transaction; imported records remain local personal events and do not populate `sjtu_sync_state`. The original ICS content is not persisted. Database backup exports a checkpointed SQLite image in a versioned JSON envelope; restore validates SHA-256 and SQLite integrity before migration and file replacement. Credential Manager entries are outside the database.

@@ -1,50 +1,61 @@
 # SJTU Schedule
 
-SJTU Schedule 是一款本地优先的 Windows 日程应用，计划整合 SJTU 教务课表、Canvas 作业 DDL 和个人日程。当前 Phase 0 已完成桌面工程骨架；本地日程与真实账户同步功能会在后续阶段实现。当前界面明确显示数据源尚未连接，不会将演示信息标为真实同步结果。
+本地优先的 Windows 日历应用，使用 Tauri 2、React、TypeScript、Rust 和 SQLite。当前包含个人日程及重复事件、周/月日历、Canvas 作业缓存、SJTU 课程缓存，以及明确标记为本地个人日程的 ICS 课表导入。Widget 暂不属于主窗口版本。
 
 ## Windows 开发环境
 
-- Windows 10/11 x64
-- Node.js 22 LTS 或当前受支持版本，pnpm 10
-- Rust stable，目标 `x86_64-pc-windows-msvc`
-- Visual Studio 2022 Build Tools，安装“使用 C++ 的桌面开发”和 Windows 10/11 SDK
+- Windows 10/11 x64、Node.js 22、pnpm 10
+- Rust stable `x86_64-pc-windows-msvc`
+- Visual Studio 2022 Build Tools（Desktop development with C++）和 Windows SDK
 - Microsoft Edge WebView2 Runtime
 
-本项目已在 `Get-ComputerInfo` 报告为 Windows 10 Pro、build `26200` 的机器上初始化；Node `v22.20.0`、pnpm `10.12.1`、Rust `1.98.1`、Visual Studio Build Tools `17.14.37628.2`、Windows SDK `10.0.26100.0` 和 WebView2 Runtime `155.0.4283.62`。若终端找不到 `cl.exe`，从 Visual Studio 的 x64 Native Tools 命令提示符运行项目命令。
+已使用 Windows 10 Pro build 26200、Node `v22.20.0`、pnpm `10.12.1`、Rust `1.98.1`、Visual Studio Build Tools `17.14.37628.2`、Windows SDK `10.0.26100.0`、WebView2 Runtime `155.0.4283.62` 开发。
 
-## 初始化和启动
+## 安装与启动
 
 ```powershell
 corepack enable
-pnpm install
+pnpm install --frozen-lockfile
 pnpm tauri dev
 ```
 
-`pnpm tauri dev` 会先启动 Vite，再打开真实 Tauri 桌面窗口。桌面端启动时在用户应用数据目录创建 `calendar.sqlite3`，并以 Rust `rusqlite` 执行带版本号的迁移。网页预览不能替代桌面端的数据库验证。
+桌面数据保存在 Tauri `app_data_dir` 的 SQLite 数据库中，并由 Rust 迁移升级。日程、已缓存 Canvas 作业及已缓存课表都可以离线读取。
 
-## 检查
+## 检查与 Windows 打包
 
 ```powershell
 pnpm lint
 pnpm test
 pnpm build
 Push-Location src-tauri
+cargo fmt --check
 cargo test
 Pop-Location
+pnpm tauri build
 ```
 
-数据库默认位置由 Tauri `app_data_dir` 决定；不会放在仓库中。`src-tauri/migrations/` 保存迁移 SQL。
+Windows 安装包由 `src-tauri/tauri.conf.json` 的 Tauri bundle targets 配置生成。实际产物路径和本机打包结果记录在 `docs/development-log.md`。
 
-## 数据源和安全
+## 连接数据源
 
-Canvas 和教务连接尚未实现。后续连接将要求用户在应用中自行完成认证。不要把密码、SSO Cookie 或 Canvas Token 发到聊天、提交到 Git 或写入普通配置/SQLite。Token 应由 Rust 后端使用 Windows 安全凭据存储；认证未经过真实账户端到端验证前，不会报告同步成功。
+- **Canvas**：在“设置 → Canvas 同步”选择交大 Canvas 实例并输入个人访问令牌；应用先安全保存，再用“测试连接”验证。Token 仅保存在 Windows Credential Manager。
+- **SJTU 教务**：选择本科或研究生后打开独立交大登录窗口，由用户本人完成 SSO/MFA。回到主窗口保存会话，填写学年、学期、首周周一与教学周数，再刷新课表。Cookie 保存在 Windows Credential Manager。状态说明和手工验证步骤见 [`docs/integration-sjtu.md`](docs/integration-sjtu.md)；当前接口仍是源码审计状态，尚无真实账户验证。
+- **ICS 课表导入**：在同页选择 ICS 文件，填写学期首周周一和教学周数，先预览再应用。导入记录作为本地个人日程，不会伪装为教务同步。
 
-参考仓库在 `references/` 中仅用于源码审计，并由 `.gitignore` 排除，不纳入本项目提交。SJTU-Course-Block 当前检出的仓库没有发现许可证文件，因此本项目只记录观察结果，不复制其代码。
+不要把密码、SSO Cookie 或 Canvas Token 发到聊天、提交到 Git 或存入 SQLite。账户验证失败时，应用保留旧缓存并显示错误。
 
-## 当前限制
+## 数据备份
 
-- Phase 0 只有本地数据库初始化与健康检查命令；CRUD、日历视图、Canvas 和教务同步尚未实现。
-- 首次运行 `pnpm tauri dev` 需要联网下载锁定的依赖；运行后的桌面壳和数据库不依赖外部账户。
-- Windows 安装包会在 Phase 5 配置和验证。
+设置中的“数据备份与恢复”可导出本地 SQLite 数据库备份文件，并从备份恢复日程和同步缓存。备份包含个人数据及远端缓存，不含保存在 Windows Credential Manager 的 Token/Cookie；恢复后需要重新验证外部账户连接。请将备份文件保存在受信任的位置。
 
-详细进度见 [`docs/development-log.md`](docs/development-log.md) 和 [`docs/known-limitations.md`](docs/known-limitations.md)。
+## 项目资料
+
+- [`docs/architecture.md`](docs/architecture.md)：模块和数据流
+- [`docs/data-model.md`](docs/data-model.md)：SQLite schema 与迁移
+- [`docs/known-limitations.md`](docs/known-limitations.md)：尚未验证的行为
+- [`docs/operations.md`](docs/operations.md)：登录、ICS、备份与恢复指南
+- [`docs/acceptance-tests.md`](docs/acceptance-tests.md)：阶段验收清单
+- [`docs/development-log.md`](docs/development-log.md)：工具链、测试和 Git SHA
+- [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)：直接依赖许可证清单
+
+`references/` 中的两个克隆仓库只读并由 Git ignore。SJTU-Course-Block 未找到许可证文件，本项目只审计其行为，没有复制其实现。

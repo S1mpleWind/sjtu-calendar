@@ -3,6 +3,7 @@ import {
   createPersonalEvent, deletePersonalEvent, getBackendStatus, getCalendarOccurrences, getCanvasConnectionStatus, getCanvasDeadlines, setCanvasAssignmentCompleted, saveCanvasCredentials, clearCanvasCredentials, testCanvasConnection, syncCanvas,
   getSjtuConnectionStatus, getSjtuCourseOccurrences, startSjtuLogin, finishSjtuLogin, clearSjtuLogin, syncSjtu,
   previewIcsImport, applyIcsImport, type IcsPreview,
+  exportDataBackup, restoreDataBackup,
   getPersonalEvent, listPersonalEvents, setRecurrenceException, updatePersonalEvent,
   type BackendStatus, type CalendarOccurrence, type EventDraft, type PersonalEvent, type CanvasConnectionStatus, type CanvasDeadline, type SjtuConnectionStatus, type SjtuCourseOccurrence,
   type RecurrenceOverride,
@@ -293,6 +294,28 @@ function App() {
     await refresh();
   }
 
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.altKey || !(event.ctrlKey || event.metaKey)) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      if (event.key.toLowerCase() === "n") {
+        event.preventDefault(); setPage("calendar"); setEditor({ date: selectedDate });
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const offset = event.key === "ArrowLeft" ? -1 : 1;
+        const date = view === "week" ? addDays(selectedDate, offset * 7) : shiftMonth(selectedDate, offset);
+        setPage("calendar"); setSelectedDate(date); setMiniMonth(date);
+      } else if (event.key === "1") {
+        event.preventDefault(); setView("week"); setPage("calendar");
+      } else if (event.key === "2") {
+        event.preventDefault(); setView("month"); setPage("calendar");
+      }
+    }
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [selectedDate, view]);
+
   const miniDays = useMemo(() => Array.from({ length: 42 }, (_, index) => addDays(gridStart(miniMonth), index)), [miniMonth]);
   const selectedMonth = selectedDate.slice(5, 7);
   const today = todayInZone(timezone);
@@ -330,8 +353,8 @@ function App() {
         </> : <div className="topbar-spacer" />}
       </header>
 
-      {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><IcsImportSettings onImported={refresh} /></> : <>
-        <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>{view === "week" ? "每周一开始 · 全天与截止事项单独显示" : "选择日期查看和管理日程"}</p></div><button className="refresh-button" aria-label="刷新日历" onClick={() => void refresh()} disabled={busy} type="button">↻</button></section>
+      {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><IcsImportSettings onImported={refresh} /><BackupSettings onRestored={refresh} /></> : <>
+        <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>Ctrl+N 新建 · Ctrl+←/→ 切换日期 · Ctrl+1/2 周/月视图</p></div><button className="refresh-button" aria-label="刷新日历" onClick={() => void refresh()} disabled={busy} type="button">↻</button></section>
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => void refresh()} type="button">重试</button></div>}
         {view === "week" ? <WeekView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} timezone={timezone} onOpenCourse={setSelectedCourse} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} /> : <MonthView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} selectedMonth={selectedMonth} onSelectDate={setSelectedDate} onOpenCourse={setSelectedCourse} onOpen={openItem} onNew={openNew} />}
         <CanvasDeadlineStrip days={days} deadlines={canvasByDay} timezone={timezone} onComplete={markCanvasDeadline} />
@@ -344,7 +367,7 @@ function App() {
 }
 
 function Settings({ timezone, onTimezoneChange }: { timezone: string; onTimezoneChange: (zone: string) => void }) {
-  return <section className="settings-panel"><div className="settings-title"><div className="settings-icon">◷</div><div><h2>日历显示</h2><p>调整个人日程的显示方式。</p></div></div><label className="setting-row"><span><strong>显示时区</strong><small>事件按此时区分组，重复日程仍遵循创建时的时区。</small></span><select aria-label="显示时区" value={timezone} onChange={(event) => onTimezoneChange(event.target.value)}>{ZONES.map((zone) => <option value={zone} key={zone}>{zone}</option>)}</select></label><div className="settings-note"><span className="online-dot" />仅保存在此设备。Canvas 和教务连接将在后续阶段设置。</div></section>;
+  return <section className="settings-panel"><div className="settings-title"><div className="settings-icon">◷</div><div><h2>日历显示</h2><p>调整个人日程的显示方式。</p></div></div><label className="setting-row"><span><strong>显示时区</strong><small>事件按此时区分组，重复日程仍遵循创建时的时区。</small></span><select aria-label="显示时区" value={timezone} onChange={(event) => onTimezoneChange(event.target.value)}>{ZONES.map((zone) => <option value={zone} key={zone}>{zone}</option>)}</select></label><div className="settings-note"><span className="online-dot" />显示时区保存在此设备；外部账户凭据由 Windows Credential Manager 管理。</div></section>;
 }
 
 function CanvasSettings({ canvasStatus, notice, onConnect, onTest, onSync, onDisconnect }: {
@@ -422,6 +445,46 @@ function IcsImportSettings({ onImported }: { onImported: () => Promise<void> }) 
     <label className="check-field"><input type="checkbox" checked={replaceSource} onChange={(event) => setReplaceSource(event.target.checked)} />替换同名来源之前导入的日程</label>
     <div className="settings-actions"><button className="cancel-button" disabled={working || !content || !firstMonday} onClick={() => void run(async () => setPreview(await previewIcsImport(content, fileName, firstMonday, weekCount)))} type="button">预览导入</button><button className="save-button" disabled={working || !preview} onClick={() => void run(async () => { const count = await applyIcsImport(content, fileName, firstMonday, weekCount, replaceSource); setMessage(`已导入 ${count} 个本地日程（ICS 文件：${fileName}）`); setPreview(null); await onImported(); })} type="button">应用导入</button></div>
     {preview && <div className="ics-preview" role="status"><strong>{preview.sourceName} · {preview.eventCount} 个日程</strong>{preview.preview.map((item, index) => <p key={`${item.startLocal}-${index}`}>{item.startLocal.replace("T", " ")} · {item.title}{item.location ? ` · ${item.location}` : ""}</p>)}{preview.eventCount > preview.preview.length && <small>仅显示前 {preview.preview.length} 项预览；应用时包含全部 {preview.eventCount} 项。</small>}</div>}
+    {problem && <div className="error-banner" role="alert">{problem}</div>}{message && <p className="settings-feedback" role="status">{message}</p>}
+  </section>;
+}
+
+function BackupSettings({ onRestored }: { onRestored: () => Promise<void> }) {
+  const [backupJson, setBackupJson] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [working, setWorking] = useState(false);
+  const [message, setMessage] = useState("");
+  const [problem, setProblem] = useState("");
+  async function exportBackup() {
+    setWorking(true); setProblem(""); setMessage("");
+    try {
+      const payload = await exportDataBackup();
+      const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `sjtu-schedule-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      setMessage("备份已生成，请在浏览器下载位置确认文件已保存。");
+    } catch (reason) { setProblem(reason instanceof Error ? reason.message : "导出备份失败"); }
+    finally { setWorking(false); }
+  }
+  async function restoreBackup() {
+    if (!backupJson || !window.confirm("恢复将替换本机日历、教务和 Canvas 缓存。应用会先保留当前数据库副本；恢复后需要重新测试外部账户连接。继续恢复吗？")) return;
+    setWorking(true); setProblem(""); setMessage("");
+    try {
+      const version = await restoreDataBackup(backupJson);
+      setBackupJson(""); setFileName("");
+      await onRestored();
+      setMessage(`恢复完成（数据库 v${version}）。外部账户凭据未包含在备份中。`);
+    } catch (reason) { setProblem(reason instanceof Error ? reason.message : "恢复备份失败"); }
+    finally { setWorking(false); }
+  }
+  return <section className="settings-panel backup-settings"><div className="settings-title"><div className="settings-icon">DB</div><div><h2>数据备份与恢复</h2><p>备份本地日程和同步缓存；Credential Manager 中的外部账户凭据不包含在内。</p></div></div>
+    <div className="settings-actions"><button className="save-button" disabled={working} onClick={() => void exportBackup()} type="button">导出数据库备份</button></div>
+    <label className="form-field"><span>从备份恢复</span><input type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; setFileName(file?.name ?? ""); setProblem(""); setMessage(""); void file?.text().then(setBackupJson).catch(() => setProblem("无法读取备份文件")); }} /></label>
+    {fileName && <p className="settings-help">已选择：{fileName}</p>}
+    <button className="cancel-button" disabled={working || !backupJson} onClick={() => void restoreBackup()} type="button">验证并恢复备份</button>
     {problem && <div className="error-banner" role="alert">{problem}</div>}{message && <p className="settings-feedback" role="status">{message}</p>}
   </section>;
 }

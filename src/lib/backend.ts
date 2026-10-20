@@ -78,6 +78,10 @@ export function getBackendStatus(): Promise<BackendStatus> {
   return invoke<BackendStatus>("get_backend_status");
 }
 
+export const exportDataBackup = () => invoke<string>("export_data_backup");
+export const restoreDataBackup = (backupJson: string) =>
+  invoke<number>("restore_data_backup", { backupJson });
+
 export const createPersonalEvent = (event: EventDraft) =>
   invoke<PersonalEvent>("create_personal_event", { event });
 

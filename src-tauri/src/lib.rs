@@ -1,3 +1,4 @@
+mod backup;
 mod canvas;
 mod db;
 mod events;
@@ -28,6 +29,16 @@ fn get_backend_status(state: State<'_, AppState>) -> Result<BackendStatus, Strin
         database: "sqlite",
         schema_version,
     })
+}
+
+#[tauri::command]
+fn export_data_backup(state: State<'_, AppState>) -> Result<String, String> {
+    backup::export(&state.database_path)
+}
+
+#[tauri::command]
+fn restore_data_backup(state: State<'_, AppState>, backup_json: String) -> Result<i64, String> {
+    backup::restore(&state.database_path, &backup_json)
 }
 
 #[tauri::command]
@@ -253,6 +264,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_backend_status,
+            export_data_backup,
+            restore_data_backup,
             create_personal_event,
             update_personal_event,
             delete_personal_event,

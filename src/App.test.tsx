@@ -119,4 +119,35 @@ describe("calendar window", () => {
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("preview_ics_import", expect.objectContaining({ sourceName: "courses.ics", firstMonday: "2026-09-07", weekCount: 16 })));
     expect(await screen.findByText("courses.ics · 2 个日程")).toBeInTheDocument();
   });
+
+  it("restores a selected backup only after explicit user confirmation", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const backup = '{"format":"edu.sjtu.schedule.sqlite-backup.v1"}';
+    invoke.mockImplementation((command: string) => {
+      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 5 });
+      if (command === "get_canvas_deadlines") return Promise.resolve([]);
+      if (command === "get_canvas_connection_status") return Promise.resolve({ configured: false, instanceUrl: null });
+      if (command === "get_sjtu_course_occurrences") return Promise.resolve([]);
+      if (command === "get_sjtu_connection_status") return Promise.resolve({ undergraduateConfigured: false, graduateConfigured: false });
+      if (command === "get_calendar_occurrences" || command === "list_personal_events") return Promise.resolve([]);
+      if (command === "restore_data_backup") return Promise.resolve(5);
+      return Promise.resolve(null);
+    });
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "⚙设置" }));
+    await user.upload(screen.getByLabelText("从备份恢复"), new File([backup], "backup.json", { type: "application/json" }));
+    await user.click(screen.getByRole("button", { name: "验证并恢复备份" }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("restore_data_backup", { backupJson: backup }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(await screen.findByText("恢复完成（数据库 v5）。外部账户凭据未包含在备份中。")).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
+  it("opens the new-event editor with Ctrl+N", async () => {
+    render(<App />);
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("get_backend_status"));
+    await userEvent.keyboard("{Control>}n{/Control}");
+    expect(await screen.findByRole("dialog", { name: "新建日程" })).toBeInTheDocument();
+  });
 });

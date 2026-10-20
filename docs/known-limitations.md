@@ -7,7 +7,8 @@
 - Academic term first-week Monday and teaching-week count must be supplied by the user because the inspected payload does not confirm them.
 - ICS import is a fallback for standard one-off and weekly course VEVENTs. BYDAY/multiple weekday recurrence, EXDATE/RDATE, VTIMEZONE-only definitions and complex recurrence rules are rejected or unsupported; no previewed import is applied until the user chooses Apply.
 - Manual native-window login, Credential Manager cleanup, real SJTU schedule comparison, WebView resize/high-DPI review and Windows installer testing remain outstanding.
-- Phase 5 packaging, backup/export and final operations guide are not complete yet.
+- Phase 5 generated the NSIS x64 installer. Manual install/uninstall, packaged WebView, and persistence review are outstanding; backup/export and the operations guide are implemented.
+- Installer launch/uninstall and restore interaction in a packaged WebView have not yet been manually exercised; automated backup/restore tests use temporary SQLite databases.
 
 - Historical Phase 0 started with a Tauri desktop shell and a single migration; later phase notes below document the completed additions.
 - No external SJTU credentials were used for automated tests; all fixtures are test-only, not runtime schedule data.

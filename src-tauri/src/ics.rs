@@ -297,10 +297,10 @@ fn parse_weekly_rule(rule: &str) -> Result<(u8, Option<usize>, Option<NaiveDate>
             values.insert(key.to_ascii_uppercase(), value.to_string());
         }
     }
-    if values.get("FREQ").map(String::as_str) != Some("WEEKLY")
-        || values.contains_key("BYDAY")
-        || values.contains_key("BYMONTHDAY")
-        || values.contains_key("BYSETPOS")
+    if values
+        .keys()
+        .any(|key| !matches!(key.as_str(), "FREQ" | "INTERVAL" | "COUNT" | "UNTIL"))
+        || values.get("FREQ").map(String::as_str) != Some("WEEKLY")
     {
         return Err(
             "ICS 课程目前支持每周重复；请先在日历中导出每个上课时段，或移除不支持的 RRULE 选项"
@@ -380,6 +380,12 @@ mod tests {
         assert_eq!(preview.event_count, 5);
         assert_eq!(preview.preview[0].title, "高等数学");
         assert_eq!(preview.preview[4].start_local, "2026-10-05T08:00:00");
+    }
+
+    #[test]
+    fn rejects_complex_recurrence_rules_instead_of_silently_dropping_days() {
+        assert!(parse_weekly_rule("FREQ=WEEKLY;BYDAY=MO,WE").is_err());
+        assert!(parse_weekly_rule("FREQ=DAILY;COUNT=8").is_err());
     }
 
     #[test]
