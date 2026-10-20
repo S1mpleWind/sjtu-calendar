@@ -50,3 +50,12 @@
 - Security: no credentials in UI input, logs, SQLite, fixtures or Git. Cookies are read by the Rust WebView API, stored in Windows Credential Manager and temporary login-window browsing data is cleared on completion/close. ICS source content is not persisted.
 - Implementation commit: `dc5d62be9696683fb137af2ba4ad6df60b8f99f9`.
 - Outstanding manual acceptance: real undergraduate/graduate login, first sync and visual comparison, Credential Manager disconnect cleanup, live window resize/high-DPI review. Phase 5 packaging is next.
+
+## Phase 5 — `release/desktop-v1`
+
+- Date: 2026-10-20 (Asia/Singapore).
+- Implementation: updated the README and added `docs/operations.md`; added Ctrl+N, Ctrl+arrow date navigation and Ctrl+1/2 view shortcuts; added a versioned SQLite JSON backup with SHA-256 and integrity validation, safe restore through a migrated temporary DB, and a retained pre-restore copy; documented direct dependency licenses in `THIRD-PARTY-NOTICES.md`. Tauri now uses the stable product name `SJTU Schedule` and defaults to an x64 NSIS installer.
+- Verification: `cargo fmt --check`, `cargo test` (20 passed, including backup/restore round trip and corrupted-checksum safety); `pnpm lint`, `pnpm test` (9 passed), `pnpm build`; and the exact `pnpm tauri build` command all passed. Cargo emitted only the Windows linker import-library creation warning.
+- Installer: `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe`, 3,497,205 bytes (3.34 MiB), SHA-256 `5B2A7EF0DE7F2A668012859BA8E7BB9058158E843A829BF3C78F59FBB48E3E77`. The first all-target build timed out while Tauri downloaded WiX (`timeout: global`); configuring the available NSIS target lets the required unqualified build command finish and produces the installer above.
+- Manual acceptance: installer installation/uninstallation, restart/persistence in the packaged WebView, native backup-download/restore interaction and high-DPI review remain unverified. Automated DB backup/restore tests pass. No real SJTU account was used; follow `docs/integration-sjtu.md` for manual authentication and schedule comparison. External credentials remain outside the backup.
+- Implementation commit: `23185730f25695d18f5add2e00cfdd558abbaafe`.
