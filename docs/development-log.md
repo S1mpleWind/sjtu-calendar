@@ -19,5 +19,5 @@
 - Verification: `cargo fmt --check` and `cargo test` passed (6 tests); `pnpm lint`, `pnpm test` (1 test), and `pnpm build` passed. A first query-window assertion expected a November 11 occurrence in a range ending November 5; the test range was corrected to November 12, after which all tests passed.
 - External authentication/API status: not applicable to the local event layer. No mock data or credentials were used.
 - Security: personal event data only; no Token/Cookie storage. SQLite keeps user-owned records in Rust-managed app data.
-- Windows desktop development launch and interactive event UI remain for Phase 2 acceptance.
-- Implementation commit: to be added after the code commit.
+- Windows desktop dev launch (`pnpm tauri dev`) started successfully and generated the app executable; interactive event editing/rendering remains Phase 2.
+- Implementation commit: `21d36cbf4248d9d2594eae05c7ea2f038cad1c27`.
