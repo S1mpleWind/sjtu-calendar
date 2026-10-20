@@ -38,3 +38,12 @@
 - [x] `pnpm lint`, `pnpm test` (5 tests, including the secure Canvas credential command flow), and `pnpm build`.
 - [x] No fixture or mock result is used by the app at runtime; user must enter their own token in Settings and use Test Connection/Sync.
 - [ ] User-authenticated live Canvas test. Requires the user to enter a token locally in the application; do not send the token in chat.
+
+## Phase 4 — SJTU schedule and ICS fallback
+
+- [x] Undergraduate and graduate redacted fixtures parse multiple meetings, section ranges, odd/even weeks and different rooms; week-expression parser covers explicit week lists/ranges.
+- [x] Repeated full sync upserts the same stable course/meeting IDs. A room change archives the old meeting and leaves only the current visible schedule; partial parsing preserves existing rows.
+- [x] Academic term requires a valid Monday and 1–24 teaching weeks; occurrence projection maps the first meeting to the selected teaching-week date in `Asia/Shanghai`.
+- [x] ICS preview maps a weekly course to the selected term; apply/replacement is transactional, keeps one active copy per source and does not write SJTU sync status. Fixtures are test-only.
+- [x] `cargo fmt --check`, `cargo test` (17 tests), `pnpm lint`, `pnpm test` (7 UI tests), and `pnpm build` passed after final fixes.
+- [ ] Manual SJTU sign-in, first schedule sync, calendar comparison, disconnect/credential cleanup, and native WebView acceptance. See `docs/integration-sjtu.md`; no live verification is claimed.

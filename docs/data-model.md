@@ -15,3 +15,11 @@ Rust owns validation, RRULE expansion, exception application and SQLite access. 
 ## Phase 3: Canvas cache (schema v3)
 
 `canvas_courses` and `canvas_assignments` are keyed by instance, Canvas user and remote object identifiers. Assignment rows keep the remote submission state, deadline, course/title/description and last sync time alongside `local_completed`, which is user-owned and retained across remote upserts. `canvas_sync_state` records sync status and counts. Credentials are excluded from all SQLite tables: only the selected instance origin is in `app_settings`; the token is in Windows Credential Manager. Cached Canvas assignments are read-only remote records apart from the local completion flag.
+
+## Phase 4: SJTU course cache (schema v4)
+
+`academic_terms` stores the source-specific academic year/term, manually supplied first teaching-week Monday, week count and `Asia/Shanghai` timezone. `sjtu_courses` uses `(term_id, source_system, external_id)` as its natural unique key. `course_meetings` separates multiple weekdays/sections/weeks/rooms for a course; week numbers are explicit JSON arrays, and stable IDs make sync repeatable. `sjtu_sync_state` records complete or partial applies. Credentials are not stored in SQLite.
+
+## Phase 4 fallback: ICS imports (schema v5)
+
+`personal_events.import_source` and `import_key` mark events created by an ICS import. A partial unique index prevents duplicate active occurrences for a source. Replacing a source soft-deletes its prior occurrences and inserts the previewed set in one transaction; imported records remain local personal events and do not populate `sjtu_sync_state`. The original ICS content is not persisted.

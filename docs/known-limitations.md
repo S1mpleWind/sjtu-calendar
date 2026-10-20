@@ -1,7 +1,16 @@
 # 已知限制
 
-- Phase 0 仅有 Tauri 桌面壳、健康检查、SQLite 初始化和一条基础迁移；尚无个人日程 CRUD、日历周/月视图、Canvas 或教务同步。
-- 当前没有真实账户 Token/Cookie，因此所有外部请求均为未验证；界面明确显示待配置，没有 mock 成功数据。
+## Current after Phase 4
+
+- SJTU endpoints and response fields are `CONFIRMED_BY_SOURCE` only. No real SJTU account or live response has been verified. Follow the steps in `docs/integration-sjtu.md` before describing the connection as live-validated.
+- Saved SJTU cookies are read from an isolated login WebView and stored in Windows Credential Manager. The connection badge means only “session saved”; undergraduate session acceptance is checked by attempting the schedule request.
+- Academic term first-week Monday and teaching-week count must be supplied by the user because the inspected payload does not confirm them.
+- ICS import is a fallback for standard one-off and weekly course VEVENTs. BYDAY/multiple weekday recurrence, EXDATE/RDATE, VTIMEZONE-only definitions and complex recurrence rules are rejected or unsupported; no previewed import is applied until the user chooses Apply.
+- Manual native-window login, Credential Manager cleanup, real SJTU schedule comparison, WebView resize/high-DPI review and Windows installer testing remain outstanding.
+- Phase 5 packaging, backup/export and final operations guide are not complete yet.
+
+- Historical Phase 0 started with a Tauri desktop shell and a single migration; later phase notes below document the completed additions.
+- No external SJTU credentials were used for automated tests; all fixtures are test-only, not runtime schedule data.
 - SJTU-Course-Block 检出版本未找到许可证文件，不能直接复制其代码。
 - 错误态的前端自动化测试当前未覆盖；已在 UI 中显示桌面服务异常提示。
 - 受限 CSP 配置后，桌面窗口重新启动成功，但用户中断了桌面检查，因此尚未再次人工点击验证 IPC。初始 CSP 下的 invoke 已通过真实窗口验证。

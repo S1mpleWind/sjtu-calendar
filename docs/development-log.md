@@ -40,3 +40,13 @@
 - Credentials/live API: no account token used. The Settings panel now allows the user to enter their own token directly into the app; no credential should be sent via chat. Live account test and Windows Credential Manager UI acceptance remain unverified.
 - Known limits: section-specific `all_dates`/override projections are not implemented; deadline placement uses `due_at`. Native-window review remains outstanding.
 - Git implementation commit: `c702ba8bdb0427bad6aa595187220ffc0187e608`.
+
+## Phase 4 — `feat/sjtu-sync`
+
+- Date: 2026-10-20 (Asia/Singapore).
+- Implementation: audited the actual undergraduate/graduate login routes, request fields, response shapes, parser fields and section table in the ignored Course-Block source. Added separate Rust request/parser paths, Windows Credential Manager cookie storage, an isolated interactive WebView with cleanup, academic term/meeting cache (schema v4), cached calendar projection, partial-result preservation and successful-sync stale-row archival. Added a clearly labeled ICS fallback with term mapping, preview, weekly expansion, per-source replacement/idempotency (schema v5), stored as local personal events rather than remote-synced courses.
+- Verification: `cargo fmt --check` and `cargo test` passed (17 tests); fixtures cover UG/graduate multi-meeting parsing, odd/even week expressions, room changes, no-ghost replacement, partial retention and term projection; ICS tests cover preview, term mapping and repeated source replacement. `pnpm lint`, `pnpm test` (7 passed), and `pnpm build` passed. The only Rust warning was the Windows linker reporting creation of its import library.
+- Live authentication/API: no real SJTU account was used. Endpoints and fields remain `CONFIRMED_BY_SOURCE`; they are not `VERIFIED_LIVE`. User manual login and schedule comparison steps are in `docs/integration-sjtu.md`. “Saved session” reports only local credential presence.
+- Security: no credentials in UI input, logs, SQLite, fixtures or Git. Cookies are read by the Rust WebView API, stored in Windows Credential Manager and temporary login-window browsing data is cleared on completion/close. ICS source content is not persisted.
+- Implementation commit: `dc5d62be9696683fb137af2ba4ad6df60b8f99f9`.
+- Outstanding manual acceptance: real undergraduate/graduate login, first sync and visual comparison, Credential Manager disconnect cleanup, live window resize/high-DPI review. Phase 5 packaging is next.
