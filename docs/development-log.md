@@ -67,7 +67,7 @@
 - Change: login-window creation and focus errors now include the underlying Windows/Tauri error so the Settings notice can distinguish a cache-directory failure from a WebView creation failure.
 - ICS clarification: `.ics` is the standard iCalendar file format. The Settings importer is an optional local fallback for course files; imported entries are never marked as a live SJTU sync. It is included because the project requirements explicitly request a file-import fallback when account access or the live interface cannot be verified.
 - Verification: direct official undergraduate entry and jAccount page rendered in the WebView; no credentials were entered. `pnpm tauri dev` also confirmed the async window creation fix. Authentication and course sync remain unverified live.
-- Commit SHA: recorded with the following implementation commit.
+- Commit SHA: `30dccdbc1feddea486a32d00478d1eaeb0ca0774`.
 - Outstanding: real login, schedule sync and calendar comparison still require the user's interaction; no credentials were used in development.
 
 ## Follow-up — SJTU term suggestions and single-class notes
@@ -77,5 +77,5 @@
 - Verification: `cargo fmt --check`, `cargo test` (20 passed), `pnpm lint`, `pnpm test` (11 passed), and `pnpm build` passed. Rust fixture verifies occurrence isolation; frontend test verifies save invocation and star rendering.
 - Windows packaging: `pnpm tauri build` passed and produced `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3,502,230 bytes; SHA-256 `B1C620EAB7A8B27CB990160E9F20F6F6D86C91CC768AEB93E511FAB92AB09DE2`).
 - External verification: official SJTU notices support 2026-09-14 (2026–27 fall) and 2026-03-02 (2025–26 spring). No real SJTU account was used; schedule sync remains unverified live.
-- Git SHA: recorded in the final documentation commit; login-window diagnostic changes were also verified and included.
+- Git SHA: `30dccdbc1feddea486a32d00478d1eaeb0ca0774`; login-window diagnostic changes were also verified and included.
 - Manual acceptance: native window layout and real account schedule comparison have not been rechecked.
