@@ -9,5 +9,5 @@
 - 验证：`pnpm install --frozen-lockfile` 成功；`pnpm lint` 成功；`pnpm test` 1 个测试成功；`pnpm build` 成功；`src-tauri` 下 `cargo fmt --check` 与 `cargo test` 成功（1 个 SQLite migration 测试）；`pnpm tauri dev` 在 CSP 收紧前打开实际 Windows 窗口并由 UI command 读出 SQLite schema version 1。CSP 收紧后再次编译并运行成功，桌面检查被物理 Escape 键中断，没有再次点击 invoke。首次 Cargo 构建时间约 5m22s。Rust linker 输出一条生成 import library 的 warning，不影响测试。
 - 外部账户：未登录、未访问真实账户；`SOURCE_INSPECTED`。
 - 安全：SQLite migration 不含 Token/Cookie；参考仓库未提交。
-- Git：首个工程提交 `b7e00c4a44b737fa9e3ee03a0e0b35de5aeafa25`；随后提交本日志更新，再 fast-forward 到本地 `main`；不推送远端。
+- Git：首个工程提交 `b7e00c4a44b737fa9e3ee03a0e0b35de5aeafa25`；工作目录原先 `main` 无任何提交/ref，因此先以该提交建立本地 `main`，再由最终日志提交 fast-forward 更新；不推送远端。
 - 未验证项：认证和外部 API live 行为、CSP 收紧后的 invoke 点击、窗口缩放手工检查、安装包（Phase 5）。
