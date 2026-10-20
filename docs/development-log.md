@@ -86,3 +86,10 @@
 - Change: removed the repeated weekday/date headings from the Canvas deadline strip; the calendar's top day headers remain visible and the deadline columns remain aligned.
 - Verification: `pnpm lint`, `pnpm test` (11 passed), `pnpm build`; the UI test asserts seven top headings and no bottom strip headings.
 - Git SHA: `8a53530dfd9b42865ffb3ec9308e55c97c845ee9`.
+
+## Follow-up — label and sync Canvas refresh
+
+- Date: 2026-10-20 (Asia/Singapore).
+- Change: the calendar toolbar's refresh arrow now has the visible label “刷新 Canvas 作业”. Clicking it runs the Canvas assignment sync and then reloads the local calendar cache. When no Canvas connection is configured, clicking it opens Settings with a clear connection prompt.
+- Verification: `pnpm lint` passed; `pnpm test` passed (12 tests), including coverage for the label and the connected `sync_canvas` invocation; `pnpm build` passed.
+- Live account sync: not performed; it requires the user's saved Canvas credentials.

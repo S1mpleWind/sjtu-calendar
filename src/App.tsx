@@ -277,6 +277,18 @@ function App() {
     setCanvasNotice(`同步${result.state === "succeeded" ? "完成" : "部分完成"}：${result.courseCount} 门课程，${result.assignmentCount} 项作业${result.failedCourses.length ? `；${result.failedCourses.length} 门课程失败` : ""}`);
     await refresh();
   }
+  async function refreshCanvasAssignments() {
+    if (!canvasStatus.configured) {
+      setCanvasNotice("请先连接 Canvas，然后即可从日历顶部刷新作业。");
+      setPage("settings");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try { await runCanvasSync(); }
+    catch (reason) { setError(reason instanceof Error ? `Canvas 刷新失败：${reason.message}` : "Canvas 刷新失败"); }
+    finally { setBusy(false); }
+  }
   async function disconnectCanvas() {
     await clearCanvasCredentials();
     setCanvasStatus({ configured: false, instanceUrl: null });
@@ -368,7 +380,7 @@ function App() {
       </header>
 
       {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><IcsImportSettings onImported={refresh} /><BackupSettings onRestored={refresh} /></> : <>
-        <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>Ctrl+N 新建 · Ctrl+←/→ 切换日期 · Ctrl+1/2 周/月视图</p></div><button className="refresh-button" aria-label="刷新日历" onClick={() => void refresh()} disabled={busy} type="button">↻</button></section>
+        <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>Ctrl+N 新建 · Ctrl+←/→ 切换日期 · Ctrl+1/2 周/月视图</p></div><button className="refresh-button" aria-label="刷新 Canvas 作业" title={canvasStatus.configured ? "从 Canvas 获取最新作业" : "连接 Canvas 后可刷新作业"} onClick={() => void refreshCanvasAssignments()} disabled={busy} type="button"><span aria-hidden="true">↻</span>刷新 Canvas 作业</button></section>
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => void refresh()} type="button">重试</button></div>}
         {view === "week" ? <WeekView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} timezone={timezone} onOpenCourse={setSelectedCourse} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} /> : <MonthView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} selectedMonth={selectedMonth} onSelectDate={setSelectedDate} onOpenCourse={setSelectedCourse} onOpen={openItem} onNew={openNew} />}
         <CanvasDeadlineStrip days={days} deadlines={canvasByDay} timezone={timezone} onComplete={markCanvasDeadline} />

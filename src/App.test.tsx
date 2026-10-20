@@ -31,6 +31,23 @@ describe("calendar window", () => {
     expect(container.querySelectorAll(".week-head .day-heading")).toHaveLength(7);
   });
 
+  it("uses the labeled calendar control to sync Canvas assignments", async () => {
+    const user = userEvent.setup();
+    invoke.mockImplementation((command: string) => {
+      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 6 });
+      if (command === "get_canvas_deadlines") return Promise.resolve([]);
+      if (command === "get_canvas_connection_status") return Promise.resolve({ configured: true, instanceUrl: "https://oc.sjtu.edu.cn" });
+      if (command === "sync_canvas") return Promise.resolve({ state: "succeeded", courseCount: 1, assignmentCount: 2, failedCourses: [], syncedAt: "2026-10-20T00:00:00Z" });
+      if (command === "get_sjtu_course_occurrences") return Promise.resolve([]);
+      if (command === "get_sjtu_connection_status") return Promise.resolve({ undergraduateConfigured: false, graduateConfigured: false });
+      if (command === "get_calendar_occurrences" || command === "list_personal_events") return Promise.resolve([]);
+      return Promise.resolve(null);
+    });
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "刷新 Canvas 作业" }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("sync_canvas"));
+  });
+
   it("opens an editor and persists a new local event through Tauri", async () => {
     const user = userEvent.setup();
     render(<App />);

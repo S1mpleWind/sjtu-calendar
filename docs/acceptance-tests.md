@@ -65,3 +65,9 @@
 - [x] Weekly calendar keeps weekday/date headings at the top and does not duplicate them above the bottom Canvas strip.
 - [x] `cargo fmt --check`, `cargo test` (20 passed), `pnpm lint`, `pnpm test` (11 passed), `pnpm build`, and `pnpm tauri build` passed.
 - [ ] Native window visual review and live authenticated timetable comparison remain for user acceptance.
+
+## Follow-up — label and sync Canvas refresh
+
+- [x] Calendar toolbar refresh control visibly says “刷新 Canvas 作业” and calls the real `sync_canvas` command when Canvas is connected.
+- [x] When Canvas is not connected, the control opens Settings and explains that a connection is needed before assignments can be refreshed.
+- [ ] Live Canvas refresh requires the user's saved Canvas credentials and remains an account-level acceptance step.
