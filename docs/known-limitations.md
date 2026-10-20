@@ -7,3 +7,7 @@
 - 受限 CSP 配置后，桌面窗口重新启动成功，但用户中断了桌面检查，因此尚未再次人工点击验证 IPC。初始 CSP 下的 invoke 已通过真实窗口验证。
 - 尚未手工验证窗口缩放行为；窗口已配置 1200×800 初始大小及 900×600 最小尺寸。
 - 安装包计划留到 Phase 5。
+
+- Phase 1 provides persistent data and Tauri commands, but the calendar UI/editor has not yet been connected; that is Phase 2 work.
+- Recurrence rules are validated and expanded by the Rust `rrule` crate. Unsupported or malformed RFC 5545 content is rejected; user-facing recurrence controls and preview are not available yet.
+- Ambiguous local times choose the earlier offset. Nonexistent initial event times are rejected, and generated recurrence starts in a DST gap are skipped.

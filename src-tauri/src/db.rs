@@ -2,6 +2,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use std::path::Path;
 
 const INITIAL_MIGRATION: &str = include_str!("../migrations/0001_initial.sql");
+const PERSONAL_EVENTS_MIGRATION: &str = include_str!("../migrations/0002_personal_events.sql");
 
 pub fn initialize_database(path: &Path) -> rusqlite::Result<i64> {
     let mut connection = Connection::open(path)?;
@@ -10,7 +11,7 @@ pub fn initialize_database(path: &Path) -> rusqlite::Result<i64> {
     apply_migrations(&mut connection)
 }
 
-fn apply_migrations(connection: &mut Connection) -> rusqlite::Result<i64> {
+pub(super) fn apply_migrations(connection: &mut Connection) -> rusqlite::Result<i64> {
     connection.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_migrations (
             version INTEGER PRIMARY KEY NOT NULL,
@@ -18,23 +19,25 @@ fn apply_migrations(connection: &mut Connection) -> rusqlite::Result<i64> {
         );",
     )?;
 
-    let initial_applied = connection
-        .query_row(
-            "SELECT version FROM schema_migrations WHERE version = 1",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()?
-        .is_some();
+    for (version, sql) in [(1, INITIAL_MIGRATION), (2, PERSONAL_EVENTS_MIGRATION)] {
+        let applied = connection
+            .query_row(
+                "SELECT version FROM schema_migrations WHERE version = ?1",
+                params![version],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+            .is_some();
 
-    if !initial_applied {
-        let transaction = connection.transaction()?;
-        transaction.execute_batch(INITIAL_MIGRATION)?;
-        transaction.execute(
-            "INSERT INTO schema_migrations (version) VALUES (?1)",
-            params![1],
-        )?;
-        transaction.commit()?;
+        if !applied {
+            let transaction = connection.transaction()?;
+            transaction.execute_batch(sql)?;
+            transaction.execute(
+                "INSERT INTO schema_migrations (version) VALUES (?1)",
+                params![version],
+            )?;
+            transaction.commit()?;
+        }
     }
 
     connection.query_row(
@@ -50,14 +53,14 @@ mod tests {
     use rusqlite::Connection;
 
     #[test]
-    fn initial_migration_is_repeatable_and_sets_default_timezone() {
+    fn migrations_upgrade_to_v2_once_and_preserve_default_timezone() {
         let mut connection = Connection::open_in_memory().expect("open in-memory database");
 
         assert_eq!(
             apply_migrations(&mut connection).expect("apply initial migration"),
-            1
+            2
         );
-        assert_eq!(apply_migrations(&mut connection).expect("apply again"), 1);
+        assert_eq!(apply_migrations(&mut connection).expect("apply again"), 2);
 
         let timezone: String = connection
             .query_row(
@@ -75,5 +78,16 @@ mod tests {
             settings_count, 1,
             "rerunning a migration must not duplicate data"
         );
+        let migration_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .expect("count migrations");
+        assert_eq!(migration_count, 2);
+        connection
+            .query_row("SELECT COUNT(*) FROM recurrence_exceptions", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .expect("v2 recurrence exceptions table exists");
     }
 }

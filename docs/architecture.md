@@ -8,3 +8,7 @@
 - 外部数据源：尚未接入。后续各自实现 Canvas 与 SJTU provider，远端错误不得清除已缓存数据。
 
 当前只有 `get_backend_status` 跨层调用，用于检查数据库可读并返回 schema 版本。Phase 0 的健康检查不能代表日程 CRUD 或外部同步已完成。
+
+## Phase 1 update
+
+The Rust backend now exposes typed personal-event CRUD, recurrence-exception and date-range occurrence commands. The date-range query projects stored local wall-clock recurrence into UTC instants while retaining event and display timezone metadata. React calls these commands through `src/lib/backend.ts`; the calendar interface is scheduled for Phase 2.

@@ -11,3 +11,13 @@
 - 安全：SQLite migration 不含 Token/Cookie；参考仓库未提交。
 - Git：首个工程提交 `b7e00c4a44b737fa9e3ee03a0e0b35de5aeafa25`；工作目录原先 `main` 无任何提交/ref，因此先以该提交建立本地 `main`，再由最终日志提交 fast-forward 更新；不推送远端。
 - 未验证项：认证和外部 API live 行为、CSP 收紧后的 invoke 点击、窗口缩放手工检查、安装包（Phase 5）。
+
+## Phase 1 - `feat/calendar-core`
+
+- Date: 2026-10-20 (Asia/Singapore).
+- Implementation: schema v2 event and recurrence-exception tables; Rust validation and CRUD; RFC 5545 recurrence expansion with stable single-occurrence cancellation/override; timezone-aware `CalendarOccurrence` projection; TypeScript Tauri command wrappers.
+- Verification: `cargo fmt --check` and `cargo test` passed (6 tests); `pnpm lint`, `pnpm test` (1 test), and `pnpm build` passed. A first query-window assertion expected a November 11 occurrence in a range ending November 5; the test range was corrected to November 12, after which all tests passed.
+- External authentication/API status: not applicable to the local event layer. No mock data or credentials were used.
+- Security: personal event data only; no Token/Cookie storage. SQLite keeps user-owned records in Rust-managed app data.
+- Windows desktop development launch and interactive event UI remain for Phase 2 acceptance.
+- Implementation commit: to be added after the code commit.
