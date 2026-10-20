@@ -85,4 +85,4 @@
 - Date: 2026-10-20 (Asia/Singapore).
 - Change: removed the repeated weekday/date headings from the Canvas deadline strip; the calendar's top day headers remain visible and the deadline columns remain aligned.
 - Verification: `pnpm lint`, `pnpm test` (11 passed), `pnpm build`; the UI test asserts seven top headings and no bottom strip headings.
-- Git SHA: pending.
+- Git SHA: `8a53530dfd9b42865ffb3ec9308e55c97c845ee9`.
