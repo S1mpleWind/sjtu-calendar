@@ -30,3 +30,13 @@
 - Manual review: interactive window resize, live CRUD through the native WebView, and high-DPI layout were not manually checked in this run.
 - API status: local Rust commands only; no external API or authentication was used.
 - Git implementation commit: `4df3d828be436d1de01e49c86929ac3ae77413a0`.
+
+## Phase 3 - `feat/canvas-sync`
+
+- Date: 2026-10-20 (Asia/Singapore).
+- Implementation: schema v3 Canvas course/assignment/sync cache; allowlisted Canvas HTTPS client with bounded pagination, no redirects, user verification, active course and assignment reads; user-entered tokens stored in Windows Credential Manager; offline cache query; partial sync retention and successful full-sync archival; local-only completion flags; Settings connect/test/sync/disconnect actions and calendar deadline display.
+- API basis: audited helper commit `780001ecb7e0e74d9af44847dbbee1f80f890c94` and official Canvas users, courses and assignments API docs. Runtime origins restricted to `oc.sjtu.edu.cn` and `jicanvas.com` verified by that source.
+- Verification: `cargo fmt --check`, `cargo test` (10 passed), `pnpm lint`, `pnpm test` (5 passed), and `pnpm build` passed. Rust tests used a local HTTP fixture for Bearer auth and Link pagination; other cache tests used isolated temporary SQLite files. No fixture feeds the app at runtime.
+- Credentials/live API: no account token used. The Settings panel now allows the user to enter their own token directly into the app; no credential should be sent via chat. Live account test and Windows Credential Manager UI acceptance remain unverified.
+- Known limits: section-specific `all_dates`/override projections are not implemented; deadline placement uses `due_at`. Native-window review remains outstanding.
+- Git implementation commit: `c702ba8bdb0427bad6aa595187220ffc0187e608`.
