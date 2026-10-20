@@ -10,7 +10,7 @@ SJTU Schedule 是一款本地优先的 Windows 日程应用，计划整合 SJTU 
 - Visual Studio 2022 Build Tools，安装“使用 C++ 的桌面开发”和 Windows 10/11 SDK
 - Microsoft Edge WebView2 Runtime
 
-本项目已在 Windows 10 Pro 22H2、Node `v22.20.0`、pnpm `10.12.1`、Rust `1.98.1`、Visual Studio Build Tools `17.14.37628.2`、Windows SDK `10.0.26100.0` 和 WebView2 Runtime `155.0.4283.62` 上初始化。若终端找不到 `cl.exe`，从 Visual Studio 的 x64 Native Tools 命令提示符运行项目命令。
+本项目已在 `Get-ComputerInfo` 报告为 Windows 10 Pro、build `26200` 的机器上初始化；Node `v22.20.0`、pnpm `10.12.1`、Rust `1.98.1`、Visual Studio Build Tools `17.14.37628.2`、Windows SDK `10.0.26100.0` 和 WebView2 Runtime `155.0.4283.62`。若终端找不到 `cl.exe`，从 Visual Studio 的 x64 Native Tools 命令提示符运行项目命令。
 
 ## 初始化和启动
 
