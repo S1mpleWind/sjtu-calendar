@@ -62,5 +62,6 @@
 - [x] Verified academic terms prefill their first Monday and week count; unknown terms are not guessed. Unit coverage includes supported dates and an unsupported year.
 - [x] A single class occurrence note persists through an idempotent schedule refresh and does not appear on later weeks of the same meeting.
 - [x] Course detail note editor invokes the secure Tauri command; saving a note renders the star indicator.
+- [x] Weekly calendar keeps weekday/date headings at the top and does not duplicate them above the bottom Canvas strip.
 - [x] `cargo fmt --check`, `cargo test` (20 passed), `pnpm lint`, `pnpm test` (11 passed), `pnpm build`, and `pnpm tauri build` passed.
 - [ ] Native window visual review and live authenticated timetable comparison remain for user acceptance.

@@ -23,10 +23,12 @@ describe("calendar window", () => {
   });
 
   it("loads the selected week from the Rust calendar query", async () => {
-    render(<App />);
+    const { container } = render(<App />);
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("get_calendar_occurrences", expect.objectContaining({ displayTimezone: "Asia/Shanghai" })));
     expect(await screen.findByRole("region", { name: "周日历" })).toBeInTheDocument();
     expect(await screen.findByText("本地 SQLite · v6")).toBeInTheDocument();
+    expect(container.querySelectorAll(".canvas-strip-day > strong")).toHaveLength(0);
+    expect(container.querySelectorAll(".week-head .day-heading")).toHaveLength(7);
   });
 
   it("opens an editor and persists a new local event through Tauri", async () => {

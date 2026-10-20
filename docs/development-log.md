@@ -79,3 +79,10 @@
 - External verification: official SJTU notices support 2026-09-14 (2026–27 fall) and 2026-03-02 (2025–26 spring). No real SJTU account was used; schedule sync remains unverified live.
 - Git SHA: `30dccdbc1feddea486a32d00478d1eaeb0ca0774`; login-window diagnostic changes were also verified and included.
 - Manual acceptance: native window layout and real account schedule comparison have not been rechecked.
+
+## Follow-up — remove duplicate weekday/date labels
+
+- Date: 2026-10-20 (Asia/Singapore).
+- Change: removed the repeated weekday/date headings from the Canvas deadline strip; the calendar's top day headers remain visible and the deadline columns remain aligned.
+- Verification: `pnpm lint`, `pnpm test` (11 passed), `pnpm build`; the UI test asserts seven top headings and no bottom strip headings.
+- Git SHA: pending.
