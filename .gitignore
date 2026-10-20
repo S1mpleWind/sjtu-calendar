@@ -1,0 +1,29 @@
+﻿# External source references (read-only; never commit)
+references/
+
+# Node and build output
+node_modules/
+dist/
+src-tauri/target/
+# Temporary generated scaffold; working files were copied to repository root
+sjtu-schedule/
+.turbo/
+
+# Local secrets; keep the documented template
+.env*
+!.env.example
+
+# Logs, backups, local databases, and temporary screenshots
+*.log
+*.bak
+*.backup
+*.sqlite
+*.sqlite3
+*.db
+*.png.tmp
+screenshots/tmp/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
