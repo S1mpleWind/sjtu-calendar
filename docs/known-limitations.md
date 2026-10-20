@@ -11,3 +11,5 @@
 - Phase 1 provides persistent data and Tauri commands, but the calendar UI/editor has not yet been connected; that is Phase 2 work.
 - Recurrence rules are validated and expanded by the Rust `rrule` crate. Unsupported or malformed RFC 5545 content is rejected; user-facing recurrence controls and preview are not available yet.
 - Ambiguous local times choose the earlier offset. Nonexistent initial event times are rejected, and generated recurrence starts in a DST gap are skipped.
+
+- Phase 2's calendar UI is connected to real local Rust/SQLite commands, but native-window resize/high-DPI appearance and CRUD in the live WebView have not been manually reviewed. Automated React interaction tests cover creation invocation, view switching, timezone changes and overlapping-event layout.

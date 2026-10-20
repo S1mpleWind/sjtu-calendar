@@ -21,3 +21,12 @@
 - Security: personal event data only; no Token/Cookie storage. SQLite keeps user-owned records in Rust-managed app data.
 - Windows desktop dev launch (`pnpm tauri dev`) started successfully and generated the app executable; interactive event editing/rendering remains Phase 2.
 - Implementation commit: `21d36cbf4248d9d2594eae05c7ea2f038cad1c27`.
+
+## Phase 2 - `feat/calendar-ui`
+
+- Date: 2026-10-20 (Asia/Singapore).
+- Implementation: main-window week and month views, mini-calendar date selection, previous/next/today navigation, per-day DDL/all-day strip, event cards with overlap columns, local event create/edit/delete drawer, series and single-occurrence actions, timezone setting persisted locally, refresh/error states. All calendar content comes from the Rust SQLite commands; Canvas and SJTU remain explicitly disconnected.
+- Verification: `pnpm lint`, `pnpm test` (4 UI tests), `pnpm build`, `cargo fmt --check`, and `cargo test` (6 tests) passed. `pnpm tauri dev` compiled and launched the Windows executable.
+- Manual review: interactive window resize, live CRUD through the native WebView, and high-DPI layout were not manually checked in this run.
+- API status: local Rust commands only; no external API or authentication was used.
+- Git implementation commit: `4df3d828be436d1de01e49c86929ac3ae77413a0`.

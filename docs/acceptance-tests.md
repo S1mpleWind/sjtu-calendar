@@ -20,3 +20,14 @@
 - [x] Reject invalid title/timezone/range and nonexistent initial DST local time; skip generated occurrence in DST gap.
 - [x] `cargo fmt --check`, `cargo test`, `pnpm lint`, `pnpm test`, `pnpm build`.
 - [ ] Phase 2 manual UI acceptance: add/edit/delete from the calendar window and validate rendered occurrence cards.
+
+## Phase 2
+
+- [x] Week and month views with date navigation and timezone-aware query ranges.
+- [x] Local event editor for title, description, location, event/deadline category, times, all-day, color and daily/weekly/biweekly recurrence.
+- [x] Edit/delete a series or change/cancel one recurring occurrence.
+- [x] Empty database renders an empty calendar without fabricated entries; Canvas/SJTU explicitly show disconnected state.
+- [x] Concurrent events occupy separate columns; DDL/all-day items render in the per-day shelf.
+- [x] Refresh, query error and retry states; timezone preference persists in this device's localStorage.
+- [x] `pnpm lint`, `pnpm test` (4 tests), `pnpm build`, `cargo fmt --check`, `cargo test` (6 tests); `pnpm tauri dev` launched the Windows executable.
+- [ ] Manual native-window resize/high-DPI and live CRUD review.

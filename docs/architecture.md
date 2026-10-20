@@ -12,3 +12,7 @@
 ## Phase 1 update
 
 The Rust backend now exposes typed personal-event CRUD, recurrence-exception and date-range occurrence commands. The date-range query projects stored local wall-clock recurrence into UTC instants while retaining event and display timezone metadata. React calls these commands through `src/lib/backend.ts`; the calendar interface is scheduled for Phase 2.
+
+## Phase 2 update
+
+The main window now renders local query results in week/month layouts and supports event creation, editing, removal, one-occurrence exceptions, timezone selection, refresh and error states. Canvas/SJTU source indicators remain disconnected until their sync phases.
