@@ -114,4 +114,4 @@
 - Implementation: added a separate frameless, resizable Widget window backed by the existing SQLite calendar/SJTU/Canvas cache; one-click detail routing to the main window; optional persisted always-on-top; window bounds persistence; and a tray menu. Closing either window hides it to the tray. No account credentials or fabricated sync results are used.
 - Verification: `pnpm lint`, `pnpm test` (16 passed), `pnpm build`, `cargo fmt --check`, and `cargo test` (21 passed). The final Windows `pnpm tauri build` completed and produced `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3,578,909 bytes; SHA-256 `F034F3D8B745CD26648C16BB1FD66C1973A26C5481E1B3DE4F6AB6A5A5DEEF58`).
 - Manual acceptance remains outstanding: native tray behavior, frameless drag/resize, restore bounds after restart, always-on-top, packaged launch, and multi-display behavior. Do not describe the Widget as release-ready until those checks pass.
-- Git commit: pending commit.
+- Git commit: `98b41e9cf1566667de4eaff2cb62d4cd9f5fee50`.
