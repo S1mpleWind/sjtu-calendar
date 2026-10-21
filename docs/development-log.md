@@ -130,3 +130,10 @@
 - Change: switched the transparent Widget window effect from Windows 11 Mica to Acrylic and lowered the shell/content surface opacity so the desktop behind the Widget is visibly present. Acrylic can reduce drag/resize performance on some Windows builds; see the official Tauri configuration documentation.
 - Installer check: the generated NSIS script includes `MUI_PAGE_DIRECTORY`, so the current interactive setup lets users choose the install directory.
 - Verification: `pnpm lint`, `pnpm test` (17 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (21 passed), and `pnpm tauri build`. NSIS output: `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3,579,553 bytes; SHA-256 `290249D9B6989925AC20AC933919004D9592734A58567BC6BC5D40544F2B9612`). Native visual confirmation remains to be checked on the user's Windows desktop.
+
+## Publish non-Widget v0.1.0 release
+
+- Date: 2026-10-21 (Asia/Singapore).
+- Source: existing `v0.1.0` tag at `5e8701b`; its Tauri config has only the main window, so the release does not include the Widget.
+- Artifact: `SJTU.Schedule_0.1.0_x64-setup.exe`, 3,502,842 bytes; SHA-256 `6E151BD9ABB5F57E5D970C8A817C0701235981E64A88B7D6755DCEF42E063518`.
+- Result: published and verified at https://github.com/S1mpleWind/sjtu-calendar/releases/tag/v0.1.0.
