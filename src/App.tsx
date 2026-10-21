@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import {
   createPersonalEvent, deletePersonalEvent, getBackendStatus, getCalendarOccurrences, getCanvasConnectionStatus, getCanvasDeadlines, setCanvasAssignmentCompleted, saveCanvasCredentials, clearCanvasCredentials, testCanvasConnection, syncCanvas,
   getSjtuConnectionStatus, getSjtuCourseOccurrences, setSjtuOccurrenceNote, startSjtuLogin, finishSjtuLogin, clearSjtuLogin, syncSjtu,
@@ -11,7 +11,7 @@ import {
 import "./App.css";
 
 type View = "week" | "month";
-type EditorState = { event?: PersonalEvent; occurrence?: CalendarOccurrence; date: string };
+type EditorState = { event?: PersonalEvent; occurrence?: CalendarOccurrence; date: string; startTime?: string };
 const ZONES = ["Asia/Shanghai", "Asia/Tokyo", "America/New_York", "Europe/London", "UTC"];
 const FIRST_HOUR = 7;
 const LAST_HOUR = 23;
@@ -83,11 +83,12 @@ function localNow(timezone: string, date: string) {
   return key === date ? `${part("hour")}:${part("minute")}` : "09:00";
 }
 function localValue(value: string) { return value.length === 16 ? `${value}:00` : value; }
-function emptyDraft(date: string, timezone: string): EventDraft {
-  const time = localNow(timezone, date);
-  const [hour, minute] = time.split(":").map(Number);
-  const end = `${String((hour + 1) % 24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  return { title: "", description: "", location: "", category: "event", startLocal: `${date}T${time}:00`, endLocal: `${hour === 23 ? addDays(date, 1) : date}T${end}:00`, timezone, allDay: false, rrule: null, color: "#4f46e5" };
+function emptyDraft(date: string, timezone: string, startTime = localNow(timezone, date)): EventDraft {
+  const [hour, minute] = startTime.split(":").map(Number);
+  const endTotal = hour * 60 + minute + 60;
+  const endDate = endTotal >= 24 * 60 ? addDays(date, 1) : date;
+  const end = `${String(Math.floor(endTotal % (24 * 60) / 60)).padStart(2, "0")}:${String(endTotal % 60).padStart(2, "0")}`;
+  return { title: "", description: "", location: "", category: "event", startLocal: `${date}T${startTime}:00`, endLocal: `${endDate}T${end}:00`, timezone, allDay: false, rrule: null, color: "#4f46e5" };
 }
 function repeatLabel(rule: string | null) {
   if (!rule) return "不重复";
@@ -216,7 +217,7 @@ function App() {
     setSelectedDate(date);
     setMiniMonth(date);
   }
-  function openNew(date = selectedDate) { setEditor({ date }); }
+  function openNew(date = selectedDate, startTime?: string) { setEditor({ date, startTime }); }
   async function openItem(item: CalendarOccurrence) {
     try {
       const event = await getPersonalEvent(item.eventId);
@@ -380,7 +381,7 @@ function App() {
       </header>
 
       {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><IcsImportSettings onImported={refresh} /><BackupSettings onRestored={refresh} /></> : <>
-        <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>Ctrl+N 新建 · Ctrl+←/→ 切换日期 · Ctrl+1/2 周/月视图</p></div><button className="refresh-button" aria-label="刷新 Canvas 作业" title={canvasStatus.configured ? "从 Canvas 获取最新作业" : "连接 Canvas 后可刷新作业"} onClick={() => void refreshCanvasAssignments()} disabled={busy} type="button"><span aria-hidden="true">↻</span>刷新 Canvas 作业</button></section>
+        <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>单击周视图空白时段快捷新建 · Ctrl+N 新建 · Ctrl+←/→ 切换日期 · Ctrl+1/2 周/月视图</p></div><button className="refresh-button" aria-label="刷新 Canvas 作业" title={canvasStatus.configured ? "从 Canvas 获取最新作业" : "连接 Canvas 后可刷新作业"} onClick={() => void refreshCanvasAssignments()} disabled={busy} type="button"><span aria-hidden="true">↻</span>刷新 Canvas 作业</button></section>
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => void refresh()} type="button">重试</button></div>}
         {view === "week" ? <WeekView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} timezone={timezone} onOpenCourse={setSelectedCourse} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} /> : <MonthView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} selectedMonth={selectedMonth} onSelectDate={setSelectedDate} onOpenCourse={setSelectedCourse} onOpen={openItem} onNew={openNew} />}
         <CanvasDeadlineStrip days={days} deadlines={canvasByDay} timezone={timezone} onComplete={markCanvasDeadline} />
@@ -542,14 +543,24 @@ function CanvasDeadlineStrip({ days, deadlines, timezone, onComplete }: { days: 
 
 function WeekView({ days, grouped, coursesByDay, selectedDate, today, timezone, onOpenCourse, onSelectDate, onOpen, onNew }: {
   days: string[]; grouped: Map<string, CalendarOccurrence[]>; coursesByDay: Map<string, SjtuCourseOccurrence[]>; selectedDate: string; today: string; timezone: string;
-  onOpenCourse: (item: SjtuCourseOccurrence) => void; onSelectDate: (date: string) => void; onOpen: (item: CalendarOccurrence) => void; onNew: (date: string) => void;
+  onOpenCourse: (item: SjtuCourseOccurrence) => void; onSelectDate: (date: string) => void; onOpen: (item: CalendarOccurrence) => void; onNew: (date: string, startTime?: string) => void;
 }) {
+  function quickAddFromTimeSlot(event: ReactMouseEvent<HTMLDivElement>, day: string) {
+    const target = event.target as Element;
+    if (target.closest("button")) return;
+    if (target !== event.currentTarget && !target.classList.contains("hour-line")) return;
+    const elapsed = Math.max(0, Math.min((LAST_HOUR - FIRST_HOUR + 1) * 60 - 1,
+      Math.floor((event.clientY - event.currentTarget.getBoundingClientRect().top) / HOUR_HEIGHT * 60)));
+    const quarterHour = Math.min((LAST_HOUR - FIRST_HOUR + 1) * 60 - 15, Math.round(elapsed / 15) * 15);
+    const totalMinutes = FIRST_HOUR * 60 + quarterHour;
+    onNew(day, `${String(Math.floor(totalMinutes / 60)).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`);
+  }
   return <section className="week-view" aria-label="周日历">
     <div className="week-head"><div className="time-gutter" />{days.map((day) => <button key={day} className={`day-heading ${day === selectedDate ? "focus" : ""} ${day === today ? "is-today" : ""}`} onClick={() => onSelectDate(day)} type="button"><span>{weekday(day)}</span><strong>{Number(day.slice(-2))}</strong><small>{(grouped.get(day) ?? []).length ? "有日程" : ""}</small></button>)}</div>
     <div className="week-scroll"><div className="time-grid"><div className="time-gutter">{Array.from({ length: LAST_HOUR - FIRST_HOUR }, (_, i) => <span style={{ top: `${i * HOUR_HEIGHT - 8}px` }} key={i}>{String(FIRST_HOUR + i).padStart(2, "0")}:00</span>)}</div>{days.map((day) => {
       const timed = [...(grouped.get(day) ?? []).filter((item) => item.category !== "deadline" && !item.allDay), ...(coursesByDay.get(day) ?? [])];
       const overlapLayout = layoutOverlaps(timed);
-      return <div className="time-column" key={day} onDoubleClick={() => onNew(day)}>{Array.from({ length: LAST_HOUR - FIRST_HOUR + 1 }, (_, i) => <span className="hour-line" style={{ top: `${i * HOUR_HEIGHT}px` }} key={i} />)}{timed.map((item) => {
+      return <div className="time-column" key={day} onClick={(event) => quickAddFromTimeSlot(event, day)} title="单击空白时段快速添加日程">{Array.from({ length: LAST_HOUR - FIRST_HOUR + 1 }, (_, i) => <span className="hour-line" style={{ top: `${i * HOUR_HEIGHT}px` }} key={i} />)}{timed.map((item) => {
         const start = clock(item.startUtc, timezone); const end = clock(item.endUtc, timezone);
         const top = (start.hour + start.minute / 60 - FIRST_HOUR) * HOUR_HEIGHT;
         let hours = (end.hour * 60 + end.minute - start.hour * 60 - start.minute) / 60;
@@ -594,7 +605,7 @@ function EventEditor({ editor, timezone, busy, onClose, onSave, onDelete }: {
     timezone: editor.occurrence.timezone,
     allDay: editor.occurrence.allDay,
     color: editor.occurrence.color,
-  } : editor.event ?? emptyDraft(editor.date, timezone);
+  } : editor.event ?? emptyDraft(editor.date, timezone, editor.startTime);
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description);
   const [location, setLocation] = useState(initial.location);

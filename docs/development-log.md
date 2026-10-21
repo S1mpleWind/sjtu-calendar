@@ -101,3 +101,9 @@
 - Package: rebuilt the x64 NSIS installer after the Canvas refresh label change. `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe`, 3,502,777 bytes; SHA-256 `E5982AA1708A08DD977A2A18E7F4FEA76FEBA6B042176993F199BE30749E90CC`.
 - Verification: `pnpm lint`, `pnpm test` (12 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (20 passed), and `pnpm tauri build` passed. The Windows linker emitted its import-library creation warning; packaging completed successfully.
 - Manual review: the user confirmed manual review is complete before release.
+
+## Follow-up — click-to-add calendar events
+
+- Date: 2026-10-21 (Asia/Singapore).
+- Change: clicking an empty time slot in the weekly calendar now opens the existing event editor with the clicked date/time (rounded to a 15-minute boundary) and a one-hour duration. Event cards keep their existing click-to-open behavior; month view retains its date-selection behavior.
+- Verification: added a UI test for the start and end time prefill. `pnpm lint`, `pnpm test` (13 passed), and `pnpm build` passed.

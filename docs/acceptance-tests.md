@@ -77,3 +77,9 @@
 - [x] User confirmed manual review is complete before release.
 - [x] Rebuilt the x64 NSIS installer and verified the build completed successfully.
 - [x] README includes both user-provided screenshots and points to the GitHub latest release page.
+
+## Follow-up — click-to-add calendar events
+
+- [x] Single-clicking an empty week time slot opens the event editor with the clicked time rounded to 15 minutes and a one-hour default duration.
+- [x] Clicking an existing event continues to open its detail editor.
+- [x] `pnpm lint`, `pnpm test` (13 passed), and `pnpm build` passed.

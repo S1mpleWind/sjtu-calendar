@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App, { suggestSjtuTermMetadata } from "./App";
@@ -60,6 +60,16 @@ describe("calendar window", () => {
       event: expect.objectContaining({ title: "项目讨论", timezone: "Asia/Shanghai", rrule: null }),
     })));
     expect(dialog).not.toBeInTheDocument();
+  });
+
+  it("opens a quick event editor at the clicked free time slot", async () => {
+    const { container } = render(<App />);
+    await screen.findByRole("region", { name: "周日历" });
+    const slot = container.querySelector(".time-column");
+    expect(slot).not.toBeNull();
+    fireEvent.click(slot!, { clientY: 32 });
+    expect((await screen.findByLabelText("开始") as HTMLInputElement).value).toMatch(/T07:30$/);
+    expect((screen.getByLabelText("结束") as HTMLInputElement).value).toMatch(/T08:30$/);
   });
 
   it("switches to month view and changes the displayed timezone", async () => {
