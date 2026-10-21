@@ -317,7 +317,14 @@ pub fn run() {
             widget::setup_tray(app.handle())?;
             Ok(())
         })
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::SIZE,
+                )
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             get_backend_status,
             export_data_backup,

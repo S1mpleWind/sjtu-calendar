@@ -65,6 +65,13 @@ describe("calendar widget", () => {
     expect(await screen.findByText(/Canvas/)).toBeInTheDocument();
   });
 
+  it("wakes the hidden main application from the widget", async () => {
+    const user = userEvent.setup();
+    render(<Widget />);
+    await user.click(screen.getByRole("button", { name: "打开主程序" }));
+    expect(api.showMainWindow).toHaveBeenCalledOnce();
+  });
+
   it("shows upcoming Canvas deadlines and routes them to the main-window detail", async () => {
     const user = userEvent.setup();
     api.getCanvasDeadlines.mockResolvedValue([deadline]);

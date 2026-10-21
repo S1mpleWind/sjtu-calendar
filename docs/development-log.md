@@ -115,3 +115,11 @@
 - Verification: `pnpm lint`, `pnpm test` (16 passed), `pnpm build`, `cargo fmt --check`, and `cargo test` (21 passed). The final Windows `pnpm tauri build` completed and produced `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3,578,909 bytes; SHA-256 `F034F3D8B745CD26648C16BB1FD66C1973A26C5481E1B3DE4F6AB6A5A5DEEF58`).
 - Manual acceptance remains outstanding: native tray behavior, frameless drag/resize, restore bounds after restart, always-on-top, packaged launch, and multi-display behavior. Do not describe the Widget as release-ready until those checks pass.
 - Git commit: `98b41e9cf1566667de4eaff2cb62d4cd9f5fee50`.
+
+## Widget compact glass and tray-first startup
+
+- Date: 2026-10-21 (Asia/Singapore).
+- Change: reduced default Widget size from 360×480 to 320×420, added translucent rounded styling and Tauri transparency/Mica support, and launch with the main window hidden and the Widget shown. The visible “主程序” control wakes the main window. Window-state persistence is restricted to position and size so startup visibility remains tray-first.
+- Verification: `pnpm lint`, `pnpm test` (17 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (21 passed), and `pnpm tauri build` passed. NSIS output: `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3,578,210 bytes; SHA-256 `C78DE94ED1E03136F89AF03B48CA94213D51B485BB5B0CA5C4973611B40FC130`).
+- Manual visual review of transparency/Mica and startup/tray wake behavior remains required on Windows.
+- Git commit: pending.

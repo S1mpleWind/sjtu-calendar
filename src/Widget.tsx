@@ -122,7 +122,7 @@ export default function Widget() {
       <div className="widget-brand" data-tauri-drag-region="deep"><span className="widget-mark" data-tauri-drag-region="deep">S</span><div data-tauri-drag-region="deep"><strong data-tauri-drag-region="deep">SJTU Schedule</strong><small data-tauri-drag-region="deep">今日安排</small></div></div>
       <div className="widget-controls">
         <button type="button" className={status.alwaysOnTop ? "widget-icon-button active" : "widget-icon-button"} aria-label="切换置顶" aria-pressed={status.alwaysOnTop} title={status.alwaysOnTop ? "取消置顶" : "置顶 Widget"} onClick={() => void toggleAlwaysOnTop().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "无法切换置顶"))} data-tauri-drag-region="false">⌖</button>
-        <button type="button" className="widget-icon-button" aria-label="打开主窗口" title="打开主窗口" onClick={() => void showMainWindow()} data-tauri-drag-region="false">↗</button>
+        <button type="button" className="widget-icon-button widget-main-button" aria-label="打开主程序" title="打开主程序" onClick={() => void showMainWindow()} data-tauri-drag-region="false">↗ <span>主程序</span></button>
         <button type="button" className="widget-icon-button" aria-label="隐藏 Widget" title="隐藏 Widget" onClick={() => void hideWidget()} data-tauri-drag-region="false">×</button>
       </div>
     </header>

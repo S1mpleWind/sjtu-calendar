@@ -88,6 +88,6 @@
 
 - [x] Widget uses live local SQLite-backed commands for today's calendar/SJTU entries and upcoming personal/Canvas deadlines; no runtime mock data or credential flow is involved.
 - [x] Clicked course, personal event, and Canvas deadline route to the corresponding main-window detail; optional always-on-top preference persists in app data.
-- [x] Tray actions open the main window, toggle the Widget, or quit; window close hides to tray.
+- [x] The Widget's “主程序” control calls the main-window wake command.
 - [x] `cargo fmt --check`, `cargo test`, `pnpm lint`, `pnpm test`, `pnpm build`; Windows `pnpm tauri build` result is recorded in `docs/development-log.md`.
-- [ ] Manual native acceptance: launch/hide/show/quit via tray, drag, resize, restart with saved bounds, always-on-top toggle, and click-through to all detail types. Test on a second display if available.
+- [ ] Manual native acceptance: verify startup shows only the compact Widget while the main window stays in the tray; show/hide/quit via tray; visually inspect transparency/Mica; drag, resize, restart with saved bounds, test always-on-top and click-through. Test on a second display if available.
