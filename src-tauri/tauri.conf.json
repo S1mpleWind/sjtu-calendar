@@ -12,11 +12,29 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "SJTU Schedule",
         "width": 1200,
         "height": 800,
         "minWidth": 900,
         "minHeight": 600
+      },
+      {
+        "label": "widget",
+        "title": "SJTU Schedule Widget",
+        "url": "index.html?window=widget",
+        "width": 360,
+        "height": 480,
+        "minWidth": 320,
+        "minHeight": 360,
+        "maxWidth": 720,
+        "maxHeight": 900,
+        "resizable": true,
+        "decorations": false,
+        "visible": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": false,
+        "create": false
       }
     ],
     "security": {

@@ -4,6 +4,7 @@ export interface BackendStatus {
   database: "sqlite";
   schemaVersion: number;
 }
+export interface WidgetStatus { canvasLastSuccessAt: string | null; sjtuLastSuccessAt: string | null; alwaysOnTop: boolean }
 
 export interface CanvasConnectionStatus { configured: boolean; instanceUrl: string | null }
 export interface CanvasProfile { userId: string; name: string; instanceUrl: string }
@@ -78,6 +79,13 @@ export interface CalendarOccurrence {
 export function getBackendStatus(): Promise<BackendStatus> {
   return invoke<BackendStatus>("get_backend_status");
 }
+
+export const getWidgetStatus = () => invoke<WidgetStatus>("get_widget_status");
+export const toggleWidget = () => invoke<void>("toggle_widget");
+export const showMainWindow = () => invoke<void>("show_main_window");
+export const hideWidget = () => invoke<void>("hide_widget");
+export const setWidgetAlwaysOnTop = (enabled: boolean) =>
+  invoke<void>("set_widget_always_on_top", { enabled });
 
 export const exportDataBackup = () => invoke<string>("export_data_backup");
 export const restoreDataBackup = (backupJson: string) =>

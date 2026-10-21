@@ -83,3 +83,11 @@
 - [x] Single-clicking an empty week time slot opens the event editor with the clicked time rounded to 15 minutes and a one-hour default duration.
 - [x] Clicking an existing event continues to open its detail editor.
 - [x] `pnpm lint`, `pnpm test` (13 passed), and `pnpm build` passed.
+
+## Desktop Widget (`feat/desktop-widget`)
+
+- [x] Widget uses live local SQLite-backed commands for today's calendar/SJTU entries and upcoming personal/Canvas deadlines; no runtime mock data or credential flow is involved.
+- [x] Clicked course, personal event, and Canvas deadline route to the corresponding main-window detail; optional always-on-top preference persists in app data.
+- [x] Tray actions open the main window, toggle the Widget, or quit; window close hides to tray.
+- [x] `cargo fmt --check`, `cargo test`, `pnpm lint`, `pnpm test`, `pnpm build`; Windows `pnpm tauri build` result is recorded in `docs/development-log.md`.
+- [ ] Manual native acceptance: launch/hide/show/quit via tray, drag, resize, restart with saved bounds, always-on-top toggle, and click-through to all detail types. Test on a second display if available.

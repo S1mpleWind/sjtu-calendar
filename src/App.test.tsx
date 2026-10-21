@@ -5,6 +5,7 @@ import App, { suggestSjtuTermMetadata } from "./App";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})), emitTo: vi.fn() }));
 
 describe("calendar window", () => {
   afterEach(() => cleanup());

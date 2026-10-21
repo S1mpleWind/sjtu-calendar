@@ -8,6 +8,7 @@
 - ICS import is a fallback for standard one-off and weekly course VEVENTs. BYDAY/multiple weekday recurrence, EXDATE/RDATE, VTIMEZONE-only definitions and complex recurrence rules are rejected or unsupported; no previewed import is applied until the user chooses Apply.
 - Manual native-window login, Credential Manager cleanup, real SJTU schedule comparison, WebView resize/high-DPI review and Windows installer testing remain outstanding.
 - Phase 5 generated the NSIS x64 installer. Manual install/uninstall, packaged WebView, and persistence review are outstanding; backup/export and the operations guide are implemented.
+- Desktop Widget implementation is under review on `feat/desktop-widget`; native move/resize, persisted window bounds, tray interactions, packaged startup and multi-monitor behavior still need manual Windows acceptance before merge or release.
 - Installer launch/uninstall and restore interaction in a packaged WebView have not yet been manually exercised; automated backup/restore tests use temporary SQLite databases.
 
 - Historical Phase 0 started with a Tauri desktop shell and a single migration; later phase notes below document the completed additions.

@@ -32,3 +32,7 @@ SJTU term suggestions are bundled only for terms whose first teaching Monday was
 ## Phase 5 update — release readiness
 
 `src-tauri/src/backup.rs` exports a versioned JSON envelope containing a checkpointed SQLite file, Base64 payload and SHA-256 checksum. Restore validates envelope/version/checksum and SQLite integrity, migrates a temporary database before replacing the live file, and keeps a pre-restore copy. Credential Manager secrets are outside SQLite and do not enter backups. The calendar exposes keyboard shortcuts for create, date navigation and view selection. User steps are in `docs/operations.md`.
+
+## Desktop Widget (`feat/desktop-widget`)
+
+The optional frameless Widget is a separate Tauri window that reads calendar, SJTU, and Canvas data through the same Rust/SQLite commands as the main window. It does not perform a second sync or use demo data. Window bounds are persisted with Tauri's window-state plugin; always-on-top is opt-in and stored in app data. A system tray menu opens the main window, toggles the Widget, or exits the application. Clicking an item routes to its detail in the main window. Closing either app window hides it so the tray remains available.

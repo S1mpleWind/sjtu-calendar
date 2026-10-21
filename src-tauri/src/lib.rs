@@ -4,6 +4,7 @@ mod db;
 mod events;
 mod ics;
 mod sjtu;
+mod widget;
 
 use serde::Serialize;
 use std::{fs, path::PathBuf};
@@ -11,6 +12,43 @@ use tauri::{Manager, State};
 
 struct AppState {
     database_path: PathBuf,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WidgetStatus {
+    canvas_last_success_at: Option<String>,
+    sjtu_last_success_at: Option<String>,
+    always_on_top: bool,
+}
+
+#[tauri::command]
+fn get_widget_status(
+    state: State<'_, AppState>,
+    widget_state: State<'_, widget::WidgetState>,
+) -> Result<WidgetStatus, String> {
+    let connection = rusqlite::Connection::open(&state.database_path)
+        .map_err(|error| format!("Local database is unavailable: {error}"))?;
+    let canvas_last_success_at = connection
+        .query_row(
+            "SELECT MAX(last_success_at) FROM canvas_sync_state",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| format!("Could not read Canvas sync status: {error}"))?;
+    let sjtu_last_success_at = connection
+        .query_row(
+            "SELECT MAX(last_success_at) FROM sjtu_sync_state",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| format!("Could not read SJTU sync status: {error}"))?;
+
+    Ok(WidgetStatus {
+        canvas_last_success_at,
+        sjtu_last_success_at,
+        always_on_top: widget_state.always_on_top(),
+    })
 }
 
 #[derive(Serialize)]
@@ -270,8 +308,16 @@ pub fn run() {
             let database_path = database_directory.join("calendar.sqlite3");
             db::initialize_database(&database_path)?;
             app.manage(AppState { database_path });
+            let widget_settings_path = database_directory.join("widget-settings.json");
+            app.manage(widget::WidgetState::new(widget_settings_path));
+            if let Some(main_window) = app.get_webview_window("main") {
+                widget::hide_on_close(&main_window);
+            }
+            widget::setup_widget_window(app.handle())?;
+            widget::setup_tray(app.handle())?;
             Ok(())
         })
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             get_backend_status,
             export_data_backup,
@@ -298,7 +344,12 @@ pub fn run() {
             clear_sjtu_login,
             sync_sjtu,
             get_sjtu_course_occurrences,
-            set_sjtu_occurrence_note
+            set_sjtu_occurrence_note,
+            get_widget_status,
+            widget::toggle_widget,
+            widget::show_main_window,
+            widget::hide_widget,
+            widget::set_widget_always_on_top
         ])
         .run(tauri::generate_context!())
         .expect("failed to run SJTU Schedule");

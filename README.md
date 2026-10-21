@@ -1,6 +1,6 @@
 # SJTU Schedule
 
-本地优先的 Windows 日历应用，使用 Tauri 2、React、TypeScript、Rust 和 SQLite。当前包含个人日程及重复事件、周/月日历、Canvas 作业缓存、SJTU 课程缓存，以及明确标记为本地个人日程的 ICS 课表导入。Widget 暂不属于主窗口版本。
+本地优先的 Windows 日历应用，使用 Tauri 2、React、TypeScript、Rust 和 SQLite。当前包含个人日程及重复事件、周/月日历、Canvas 作业缓存、SJTU 课程缓存，以及明确标记为本地个人日程的 ICS 课表导入。Windows 桌面 Widget 在独立的 `feat/desktop-widget` 分支开发，主窗口稳定版本暂未包含。
 
 ## 应用预览
 
@@ -30,6 +30,8 @@ pnpm tauri dev
 ```
 
 桌面数据保存在 Tauri `app_data_dir` 的 SQLite 数据库中，并由 Rust 迁移升级。日程、已缓存 Canvas 作业及已缓存课表都可以离线读取。
+
+Widget 计划作为独立窗口提供今日课程/日程和近期截止事项，读取同一份本地缓存；关闭主窗口会将应用保留在系统托盘。此功能当前处于独立分支开发，尚未作为 v0.1.0 发布。
 
 ## 检查与 Windows 打包
 

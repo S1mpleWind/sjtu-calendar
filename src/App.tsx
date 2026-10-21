@@ -8,6 +8,8 @@ import {
   type BackendStatus, type CalendarOccurrence, type EventDraft, type PersonalEvent, type CanvasConnectionStatus, type CanvasDeadline, type SjtuConnectionStatus, type SjtuCourseOccurrence,
   type RecurrenceOverride,
 } from "./lib/backend";
+import { listen } from "@tauri-apps/api/event";
+import { toggleWidget } from "./lib/backend";
 import "./App.css";
 
 type View = "week" | "month";
@@ -144,6 +146,7 @@ function App() {
   const [sjtuStatus, setSjtuStatus] = useState<SjtuConnectionStatus>({ undergraduateConfigured: false, graduateConfigured: false });
   const [sjtuNotice, setSjtuNotice] = useState("");
   const [selectedCourse, setSelectedCourse] = useState<SjtuCourseOccurrence | null>(null);
+  const [selectedCanvasDeadline, setSelectedCanvasDeadline] = useState<CanvasDeadline | null>(null);
   const [status, setStatus] = useState<BackendStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +155,27 @@ function App() {
   const refreshSequence = useRef(0);
 
   useEffect(() => { localStorage.setItem("calendar-timezone", timezone); }, [timezone]);
+  useEffect(() => {
+    let active = true;
+    const unlisten: Array<() => void> = [];
+    void listen<SjtuCourseOccurrence>("widget-open-course", ({ payload }) => {
+      const date = dateInZone(new Date(payload.startUtc), timezone);
+      setPage("calendar"); setView("week"); setSelectedDate(date); setMiniMonth(date); setSelectedCourse(payload);
+    }).then((stop) => { if (active) unlisten.push(stop); else stop(); });
+    void listen<CalendarOccurrence>("widget-open-event", async ({ payload }) => {
+      const date = dateInZone(new Date(payload.startUtc), timezone);
+      setPage("calendar"); setView("week"); setSelectedDate(date); setMiniMonth(date);
+      try {
+        const event = await getPersonalEvent(payload.eventId);
+        if (event && active) setEditor({ event, occurrence: payload, date });
+      } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : "无法读取日程详情"); }
+    }).then((stop) => { if (active) unlisten.push(stop); else stop(); });
+    void listen<CanvasDeadline>("widget-open-canvas-deadline", ({ payload }) => {
+      const date = dateInZone(new Date(payload.dueAt), timezone);
+      setPage("calendar"); setView("week"); setSelectedDate(date); setMiniMonth(date); setSelectedCanvasDeadline(payload);
+    }).then((stop) => { if (active) unlisten.push(stop); else stop(); });
+    return () => { active = false; unlisten.forEach((stop) => stop()); };
+  }, [timezone]);
   const range = useMemo(() => {
     if (view === "week") {
       const from = mondayOf(selectedDate);
@@ -376,6 +400,7 @@ function App() {
         {page === "calendar" ? <>
           <div className="date-nav"><button aria-label="上一个时间段" onClick={() => navigate(-1)} type="button">‹</button><button className="today-button" onClick={() => { setSelectedDate(today); setMiniMonth(today); }} type="button">今天</button><button aria-label="下一个时间段" onClick={() => navigate(1)} type="button">›</button><strong>{displayMonth(selectedDate, timezone)}</strong></div>
           <div className="view-switch" role="group" aria-label="日历视图"><button className={view === "week" ? "selected" : ""} onClick={() => setView("week")} type="button">周</button><button className={view === "month" ? "selected" : ""} onClick={() => setView("month")} type="button">月</button></div>
+          <button className="widget-open-button" onClick={() => void toggleWidget().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "无法打开 Widget"))} type="button">▣ Widget</button>
           <button className="new-button" onClick={() => openNew()} type="button"><span>＋</span>新建日程</button>
         </> : <div className="topbar-spacer" />}
       </header>
@@ -390,6 +415,7 @@ function App() {
     </section>
     {editor && <EventEditor key={`${editor.event?.id ?? "new"}-${editor.occurrence?.occurrenceId ?? editor.date}`} editor={editor} timezone={timezone} busy={busy} onClose={() => setEditor(null)} onSave={saveItem} onDelete={removeItem} />}
     {selectedCourse && <CourseDetails course={selectedCourse} onSaveNote={saveCourseOccurrenceNote} onClose={() => setSelectedCourse(null)} />}
+    {selectedCanvasDeadline && <CanvasAssignmentDetails deadline={selectedCanvasDeadline} timezone={timezone} onClose={() => setSelectedCanvasDeadline(null)} />}
   </main>;
 }
 
@@ -530,6 +556,11 @@ function CourseDetails({ course, onClose, onSaveNote }: { course: SjtuCourseOccu
     finally { setSavingNote(false); }
   }
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="event-modal course-details" role="dialog" aria-modal="true" aria-labelledby="course-details-title"><header className="modal-header"><div><p className="eyebrow">{course.sourceSystem === "undergraduate" ? "本科教务" : "研究生教务"} · 第 {course.weekNumber} 周</p><h2 id="course-details-title">{course.title}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header><div className="form-scroll"><p><strong>时间：</strong>{new Intl.DateTimeFormat("zh-CN", { ...timeFormat, weekday: "long", month: "long", day: "numeric" }).format(new Date(course.startUtc))} · {new Intl.DateTimeFormat("zh-CN", timeFormat).format(new Date(course.startUtc))}–{new Intl.DateTimeFormat("zh-CN", timeFormat).format(new Date(course.endUtc))}</p><p><strong>地点：</strong>{course.location || "未提供"}</p><p><strong>教师：</strong>{course.teacher || "未提供"}</p><p><strong>节次：</strong>第 {course.startSection}–{course.endSection} 节</p><label className="form-field course-note-field"><span>本次课的备注</span><textarea aria-label="本次课的备注" maxLength={2000} rows={4} value={note} onChange={(event) => setNote(event.target.value)} placeholder="例如：带实验报告、去办公室答疑" /></label>{noteMessage && <p role="status" className="settings-feedback">{noteMessage}</p>}</div><footer className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>关闭</button><button className="save-button" type="button" disabled={savingNote} onClick={() => void saveNote()}>{savingNote ? "保存中…" : "保存备注"}</button></footer></section></div>;
+}
+
+function CanvasAssignmentDetails({ deadline, timezone, onClose }: { deadline: CanvasDeadline; timezone: string; onClose: () => void }) {
+  const due = new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, dateStyle: "full", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(deadline.dueAt));
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="event-modal course-details" role="dialog" aria-modal="true" aria-labelledby="canvas-details-title"><header className="modal-header"><div><p className="eyebrow">Canvas 作业</p><h2 id="canvas-details-title">{deadline.title}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header><div className="form-scroll"><p><strong>课程：</strong>{deadline.courseName}</p><p><strong>截止：</strong>{due}</p><p><strong>提交状态：</strong>{deadline.submittedAt ? "已提交" : deadline.localCompleted ? "已在本地标记完成" : "未完成"}</p>{deadline.description && <p className="canvas-detail-description">{deadline.description}</p>}<p><strong>Canvas 链接：</strong><a href={deadline.htmlUrl} target="_blank" rel="noreferrer">{deadline.htmlUrl}</a></p></div><footer className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>关闭</button></footer></section></div>;
 }
 
 function intervalLabel(startUtc: string, endUtc: string, timezone: string) {
