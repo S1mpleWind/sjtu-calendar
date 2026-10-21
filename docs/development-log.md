@@ -122,4 +122,4 @@
 - Change: reduced default Widget size from 360×480 to 320×420, added translucent rounded styling and Tauri transparency/Mica support, and launch with the main window hidden and the Widget shown. The visible “主程序” control wakes the main window. Window-state persistence is restricted to position and size so startup visibility remains tray-first.
 - Verification: `pnpm lint`, `pnpm test` (17 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (21 passed), and `pnpm tauri build` passed. NSIS output: `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3,578,210 bytes; SHA-256 `C78DE94ED1E03136F89AF03B48CA94213D51B485BB5B0CA5C4973611B40FC130`).
 - Manual visual review of transparency/Mica and startup/tray wake behavior remains required on Windows.
-- Git commit: pending.
+- Git commit: `4c3b9376b4c4c3f56b70e3e35461e429ef014436`.
