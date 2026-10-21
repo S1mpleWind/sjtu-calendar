@@ -137,3 +137,11 @@
 - Source: existing `v0.1.0` tag at `5e8701b`; its Tauri config has only the main window, so the release does not include the Widget.
 - Artifact: `SJTU.Schedule_0.1.0_x64-setup.exe`, 3,502,842 bytes; SHA-256 `6E151BD9ABB5F57E5D970C8A817C0701235981E64A88B7D6755DCEF42E063518`.
 - Result: published and verified at https://github.com/S1mpleWind/sjtu-calendar/releases/tag/v0.1.0.
+
+## Prepare v1.0.0 Widget release
+
+- Date: 2026-10-21 (Asia/Singapore).
+- Source commit: `eae214a9546de848a16bce17320bb9fd6cc11a61` (`chore(release): prepare v1.0.0`); aligned the Tauri, Cargo, and frontend versions and updated the README to describe the included Widget.
+- Verification: `pnpm lint`, `pnpm test` (17 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (21 passed), and `pnpm tauri build`. The packaged executable reports file/product version `1.0.0`.
+- Artifact: `src-tauri/target/release/bundle/nsis/SJTU Schedule_1.0.0_x64-setup.exe`, 3,579,677 bytes; SHA-256 `4292AC2ABD9698C9E7F888890F269048813FFD57408658BBEE9B9028801C7510`.
+- Not manually verified: native Widget transparency/performance, tray startup/wake behavior, install/uninstall on a clean Windows profile, and live SJTU/Canvas authentication.
