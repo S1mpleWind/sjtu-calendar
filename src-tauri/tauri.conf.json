@@ -34,7 +34,7 @@
         "decorations": false,
         "transparent": true,
         "noRedirectionBitmap": true,
-        "windowEffects": { "effects": ["mica"] },
+        "windowEffects": { "effects": ["acrylic"] },
         "visible": true,
         "skipTaskbar": true,
         "alwaysOnTop": false,

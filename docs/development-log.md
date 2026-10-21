@@ -123,3 +123,10 @@
 - Verification: `pnpm lint`, `pnpm test` (17 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (21 passed), and `pnpm tauri build` passed. NSIS output: `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3,578,210 bytes; SHA-256 `C78DE94ED1E03136F89AF03B48CA94213D51B485BB5B0CA5C4973611B40FC130`).
 - Manual visual review of transparency/Mica and startup/tray wake behavior remains required on Windows.
 - Git commit: `4c3b9376b4c4c3f56b70e3e35461e429ef014436`.
+
+## Widget visible acrylic transparency adjustment
+
+- Date: 2026-10-21 (Asia/Singapore).
+- Change: switched the transparent Widget window effect from Windows 11 Mica to Acrylic and lowered the shell/content surface opacity so the desktop behind the Widget is visibly present. Acrylic can reduce drag/resize performance on some Windows builds; see the official Tauri configuration documentation.
+- Installer check: the generated NSIS script includes `MUI_PAGE_DIRECTORY`, so the current interactive setup lets users choose the install directory.
+- Verification: `pnpm lint`, `pnpm test` (17 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (21 passed), and `pnpm tauri build`. NSIS output: `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3,579,553 bytes; SHA-256 `290249D9B6989925AC20AC933919004D9592734A58567BC6BC5D40544F2B9612`). Native visual confirmation remains to be checked on the user's Windows desktop.
