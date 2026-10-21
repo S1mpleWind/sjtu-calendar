@@ -31,7 +31,7 @@ pnpm tauri dev
 
 桌面数据保存在 Tauri `app_data_dir` 的 SQLite 数据库中，并由 Rust 迁移升级。日程、已缓存 Canvas 作业及已缓存课表都可以离线读取。
 
-Widget 在独立的 `feat/desktop-widget` 分支开发为更紧凑的半透明窗口：启动后 Widget 显示、主窗口留在系统托盘中，可从 Widget 唤醒主程序。两者读取同一份本地缓存；关闭窗口会将应用保留在托盘。此功能尚未合并或作为 v0.1.0 发布。
+桌面 Widget 提供紧凑的半透明窗口：启动后 Widget 显示、主窗口留在系统托盘中，可从 Widget 唤醒主程序。两者读取同一份本地缓存；关闭窗口会将应用保留在托盘。此功能包含在 v1.0.0 Windows 版本中。
 
 ## 检查与 Windows 打包
 
