@@ -146,3 +146,12 @@
 - Artifact: `src-tauri/target/release/bundle/nsis/SJTU Schedule_1.0.0_x64-setup.exe`, 3,579,677 bytes; SHA-256 `4292AC2ABD9698C9E7F888890F269048813FFD57408658BBEE9B9028801C7510`.
 - Result: published and verified at https://github.com/S1mpleWind/sjtu-calendar/releases/tag/v1.0.0; the uploaded asset digest matches the local SHA-256.
 - Not manually verified: native Widget transparency/performance, tray startup/wake behavior, install/uninstall on a clean Windows profile, and live SJTU/Canvas authentication.
+## Calendar consistency fixes — 2026-10-23
+
+- Branch: `feat/desktop-widget`; implementation commit `c66206906821e5035e280ad776825ad0a8434c19`.
+- Fixed: explicit recurrence edit scope preserves the original series anchor and full RRULE; moved single occurrences are found in their destination range without duplicate IDs. Title-only exceptions retain their dated occurrence, including a move back to the series start.
+- Fixed: Canvas cache reads/completion flags use an explicitly verified account; credential changes rotate a non-secret revision and reject stale sync results. Upgrade from an unbound cache and backup restore require one Test Connection/Sync to rebind the current account; existing cached rows are retained.
+- Fixed: successful backend mutations broadcast cache-change notifications to both windows; Widget follows timezone changes and discards out-of-order reads. Overnight/multi-day events appear on each overlapping date with exclusive midnight boundaries and clipped week-view segments.
+- Verification: `pnpm lint`, `pnpm test` (25 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (23 passed), `pnpm tauri build`, and `git diff --check` passed. Regression tests cover the defects reproduced in the review, account replacement/stale responses, restore identity reset, timezone/DST boundaries, notification cleanup, and race ordering.
+- Local NSIS package: `src-tauri/target/release/bundle/nsis/SJTU.Schedule_1.0.0_c662069_x64-setup.exe`, 3,592,002 bytes; SHA-256 `83819164F60D59DCEC67587F4C4C356CBEB966E3EB0A529CDA4C23F0BCC2EFD8`.
+- Not verified manually: native packaged window notification delivery/rendering and real SJTU/Canvas authentication. No credentials were read for this check; API tests use fixtures. This task creates local commits and an installer; no remote release was changed.

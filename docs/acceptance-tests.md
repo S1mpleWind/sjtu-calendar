@@ -94,6 +94,7 @@
 # Calendar consistency regression checks — 2026-10-23
 
 - Frontend: `pnpm lint`, `pnpm test` (25 passed), and `pnpm build` passed.
+- Windows packaging: `pnpm tauri build` passed; a local installer is retained as `SJTU.Schedule_1.0.0_c662069_x64-setup.exe` (3,592,002 bytes).
 - Rust: `cargo test` (23 passed); regression coverage includes moved recurrence lookup, preserving dates for title-only overrides, moving an instance back to the series start, explicit account selection, invalidating stale account requests, and resetting identity on restore.
 - UI regression coverage includes preserving original series dates/full RRULE, single-occurrence saves, overnight segmentation in week/month views, midnight exclusivity, DST date grouping, Widget data/timezone notifications, listener cleanup, and out-of-order cache reads.
 - Not rechecked manually: packaged dual-window notification delivery, native Widget rendering, and real Canvas/SJTU authentication. Fixture/API-command tests are not a claim of live account validation.
