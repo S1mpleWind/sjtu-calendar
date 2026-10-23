@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { emitTo } from "@tauri-apps/api/event";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { emitTo, listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   getCalendarOccurrences, getCanvasDeadlines, getSjtuCourseOccurrences, getWidgetStatus,
@@ -7,6 +7,8 @@ import {
   type CalendarOccurrence, type CanvasDeadline, type SjtuCourseOccurrence, type WidgetStatus,
 } from "./lib/backend";
 import "./widget.css";
+import { occursOnDay } from "./lib/calendar-days";
+import { useCalendarUpdates } from "./lib/calendar-updates";
 
 function addDays(date: string, amount: number) {
   const value = new Date(date + "T00:00:00Z");
@@ -42,7 +44,8 @@ type DeadlineItem =
   | { kind: "local"; dueAt: string; value: CalendarOccurrence };
 
 export default function Widget() {
-  const [timezone] = useState(() => localStorage.getItem("calendar-timezone") || "Asia/Shanghai");
+  const [timezone, setTimezone] = useState(() => localStorage.getItem("calendar-timezone") || "Asia/Shanghai");
+  const refreshSequence = useRef(0);
   const [now, setNow] = useState(() => new Date());
   const [events, setEvents] = useState<CalendarOccurrence[]>([]);
   const [courses, setCourses] = useState<SjtuCourseOccurrence[]>([]);
@@ -55,6 +58,7 @@ export default function Widget() {
   const today = dateInZone(now, timezone);
   const through = addDays(today, 7);
   const refresh = useCallback(async () => {
+    const sequence = ++refreshSequence.current;
     setLoading(true);
     setError("");
     try {
@@ -64,17 +68,31 @@ export default function Widget() {
         getSjtuCourseOccurrences(today, through, timezone),
         getWidgetStatus(),
       ]);
+      if (sequence !== refreshSequence.current) return;
       setEvents(nextEvents);
       setCanvasDeadlines(nextDeadlines);
       setCourses(nextCourses);
       setStatus(nextStatus);
       setLoadedAt(new Date());
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "读取本机日程缓存失败");
+      if (sequence === refreshSequence.current) setError(reason instanceof Error ? reason.message : "读取本机日程缓存失败");
     } finally {
-      setLoading(false);
+      if (sequence === refreshSequence.current) setLoading(false);
     }
   }, [through, timezone, today]);
+  useCalendarUpdates(refresh);
+  useEffect(() => {
+    let active = true;
+    let stop: (() => void) | undefined;
+    const update = (zone: string) => {
+      try { new Intl.DateTimeFormat("en", { timeZone: zone }); if (active) setTimezone(zone); } catch { /* Ignore malformed external preferences. */ }
+    };
+    const read = () => update(localStorage.getItem("calendar-timezone") || "Asia/Shanghai");
+    void listen<string>("calendar-timezone-changed", ({ payload }) => update(payload)).then((unlisten) => { if (active) stop = unlisten; else unlisten(); }).catch(() => {});
+    window.addEventListener("storage", read);
+    window.addEventListener("focus", read);
+    return () => { active = false; stop?.(); window.removeEventListener("storage", read); window.removeEventListener("focus", read); };
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void refresh(); }, 0);
@@ -86,7 +104,7 @@ export default function Widget() {
   }, []);
 
   const todayItems = useMemo<TodayItem[]>(() => [
-    ...events.filter((item) => item.category === "event" && dateInZone(new Date(item.startUtc), timezone) === today)
+    ...events.filter((item) => item.category === "event" && occursOnDay(item, today, timezone))
       .map((value) => ({ kind: "event" as const, startUtc: value.startUtc, value })),
     ...courses.filter((item) => dateInZone(new Date(item.startUtc), timezone) === today)
       .map((value) => ({ kind: "course" as const, startUtc: value.startUtc, value })),

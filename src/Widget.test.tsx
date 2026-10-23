@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Widget from "./Widget";
@@ -13,12 +13,12 @@ const { api, eventsApi, appWindow } = vi.hoisted(() => ({
     setWidgetAlwaysOnTop: vi.fn(),
     showMainWindow: vi.fn(),
   },
-  eventsApi: { emitTo: vi.fn() },
+  eventsApi: { emitTo: vi.fn(), listen: vi.fn() },
   appWindow: { startResizeDragging: vi.fn() },
 }));
 
 vi.mock("./lib/backend", () => api);
-vi.mock("@tauri-apps/api/event", () => ({ emitTo: eventsApi.emitTo }));
+vi.mock("@tauri-apps/api/event", () => eventsApi);
 vi.mock("@tauri-apps/api/webviewWindow", () => ({ getCurrentWebviewWindow: () => appWindow }));
 
 const course = {
@@ -53,6 +53,7 @@ describe("calendar widget", () => {
     api.setWidgetAlwaysOnTop.mockReset().mockResolvedValue(undefined);
     api.showMainWindow.mockReset().mockResolvedValue(undefined);
     eventsApi.emitTo.mockReset().mockResolvedValue(undefined);
+    eventsApi.listen.mockReset().mockResolvedValue(() => {});
   });
 
   it("shows cached courses and opens their details in the main window", async () => {
@@ -72,6 +73,24 @@ describe("calendar widget", () => {
     expect(api.showMainWindow).toHaveBeenCalledOnce();
   });
 
+  it("reloads changed data and follows main-window timezone changes, then releases listeners", async () => {
+    const handlers = new Map<string, (event: { payload: string }) => void>();
+    const stops: Array<ReturnType<typeof vi.fn>> = [];
+    eventsApi.listen.mockImplementation((name: string, handler: (event: { payload: string }) => void) => {
+      handlers.set(name, handler);
+      const stop = vi.fn(); stops.push(stop); return Promise.resolve(stop);
+    });
+    const { unmount } = render(<Widget />);
+    await waitFor(() => expect(api.getCalendarOccurrences).toHaveBeenCalledTimes(1));
+    api.getCalendarOccurrences.mockResolvedValue([personalEvent]);
+    await act(async () => handlers.get("calendar-data-changed")!({ payload: "" }));
+    expect(await screen.findByRole("button", { name: /读书会/ })).toBeInTheDocument();
+    await act(async () => handlers.get("calendar-timezone-changed")!({ payload: "America/New_York" }));
+    await waitFor(() => expect(api.getCalendarOccurrences).toHaveBeenLastCalledWith(expect.any(String), expect.any(String), "America/New_York"));
+    unmount();
+    stops.forEach((stop) => expect(stop).toHaveBeenCalledOnce());
+  });
+
   it("shows upcoming Canvas deadlines and routes them to the main-window detail", async () => {
     const user = userEvent.setup();
     api.getCanvasDeadlines.mockResolvedValue([deadline]);
@@ -79,6 +98,24 @@ describe("calendar widget", () => {
     await user.click(await screen.findByRole("button", { name: /实验报告/ }));
     expect(eventsApi.emitTo).toHaveBeenCalledWith("main", "widget-open-canvas-deadline", deadline);
     expect(api.showMainWindow).toHaveBeenCalled();
+  });
+
+  it("ignores an older pending cache read after a newer change arrives", async () => {
+    let notify: (() => void) | undefined;
+    eventsApi.listen.mockImplementation((name: string, handler: () => void) => {
+      if (name === "calendar-data-changed") notify = handler;
+      return Promise.resolve(() => {});
+    });
+    let resolveOld: (items: typeof personalEvent[]) => void = () => {};
+    api.getCalendarOccurrences.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }));
+    render(<Widget />);
+    await waitFor(() => expect(api.getCalendarOccurrences).toHaveBeenCalledTimes(1));
+    api.getCalendarOccurrences.mockResolvedValue([{ ...personalEvent, title: "最新日程" }]);
+    await act(async () => notify!());
+    expect(await screen.findByRole("button", { name: /最新日程/ })).toBeInTheDocument();
+    await act(async () => resolveOld([{ ...personalEvent, title: "旧日程" }]));
+    expect(screen.queryByRole("button", { name: /旧日程/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /最新日程/ })).toBeInTheDocument();
   });
 
   it("routes a personal event to its main-window detail", async () => {

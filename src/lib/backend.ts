@@ -6,7 +6,7 @@ export interface BackendStatus {
 }
 export interface WidgetStatus { canvasLastSuccessAt: string | null; sjtuLastSuccessAt: string | null; alwaysOnTop: boolean }
 
-export interface CanvasConnectionStatus { configured: boolean; instanceUrl: string | null }
+export interface CanvasConnectionStatus { configured: boolean; instanceUrl: string | null; accountVerified: boolean }
 export interface CanvasProfile { userId: string; name: string; instanceUrl: string }
 export interface CanvasSyncResult { state: string; courseCount: number; assignmentCount: number; failedCourses: string[]; syncedAt: string }
 export interface CanvasDeadline {

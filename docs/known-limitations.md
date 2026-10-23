@@ -8,8 +8,9 @@
 - ICS import is a fallback for standard one-off and weekly course VEVENTs. BYDAY/multiple weekday recurrence, EXDATE/RDATE, VTIMEZONE-only definitions and complex recurrence rules are rejected or unsupported; no previewed import is applied until the user chooses Apply.
 - Manual native-window login, Credential Manager cleanup, real SJTU schedule comparison, WebView resize/high-DPI review and Windows installer testing remain outstanding.
 - Phase 5 generated the NSIS x64 installer. Manual install/uninstall, packaged WebView, and persistence review are outstanding; backup/export and the operations guide are implemented.
-- Desktop Widget implementation is under review on `feat/desktop-widget`; native move/resize, persisted window bounds, tray interactions, packaged startup and multi-monitor behavior still need manual Windows acceptance before merge or release.
-- Widget uses Tauri transparency and the Windows 11 Mica effect when available, with a translucent CSS surface. Opacity and backdrop rendering vary by Windows version and compositor and still require a visual check on the user's machine.
+- Desktop Widget is included in v1.0.0 on `feat/desktop-widget`; native move/resize, persisted window bounds, tray interactions, packaged startup and multi-monitor behavior still need manual Windows acceptance.
+- Widget uses Tauri transparency and Windows Acrylic with a translucent CSS surface. Opacity and backdrop rendering vary by Windows version and compositor and still require a visual check on the user's machine.
+- After upgrading from v1.0.0's unbound Canvas cache, replacing credentials, or restoring a backup, use Test Connection or Sync once to bind the current Canvas account. Existing cached rows are retained but hidden until that identity is verified; subsequent offline reads use the bound account.
 - Installer launch/uninstall and restore interaction in a packaged WebView have not yet been manually exercised; automated backup/restore tests use temporary SQLite databases.
 
 - Historical Phase 0 started with a Tauri desktop shell and a single migration; later phase notes below document the completed additions.

@@ -14,7 +14,9 @@ Rust owns validation, RRULE expansion, exception application and SQLite access. 
 
 ## Phase 3: Canvas cache (schema v3)
 
-`canvas_courses` and `canvas_assignments` are keyed by instance, Canvas user and remote object identifiers. Assignment rows keep the remote submission state, deadline, course/title/description and last sync time alongside `local_completed`, which is user-owned and retained across remote upserts. `canvas_sync_state` records sync status and counts. Credentials are excluded from all SQLite tables: only the selected instance origin is in `app_settings`; the token is in Windows Credential Manager. Cached Canvas assignments are read-only remote records apart from the local completion flag.
+`canvas_courses` and `canvas_assignments` are keyed by instance, Canvas user and remote object identifiers. Assignment rows keep the remote submission state, deadline, course/title/description and last sync time alongside `local_completed`, which is user-owned and retained across remote upserts. `canvas_sync_state` records sync status and counts. Credentials are excluded from all SQLite tables: only non-secret instance/account settings are in `app_settings`; the token is in Windows Credential Manager. Cached Canvas assignments are read-only remote records apart from the local completion flag.
+
+The account selection additionally stores `canvas.active_user_id` (a verified remote identity) and `canvas.credential_revision` (a random, non-secret configuration revision) in `app_settings`. Neither is a token. Credential replacement clears the selected user; stale requests cannot write data when their revision no longer matches. Restore clears the selection because a backup does not carry its matching Credential Manager secret. No schema migration or cache deletion is needed.
 
 ## Phase 4: SJTU course cache (schema v4)
 

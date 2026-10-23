@@ -214,4 +214,59 @@ describe("calendar window", () => {
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("set_sjtu_occurrence_note", { meetingId: "meeting-test", weekNumber: 1, note: "带讲义" }));
     expect(await screen.findByLabelText("含备注")).toBeInTheDocument();
   });
+
+  function recurringFixture() {
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const prior = new Date(day + "T00:00:00Z"); prior.setUTCDate(prior.getUTCDate() - 14);
+    const base = prior.toISOString().slice(0, 10);
+    const event = { id: "repeat-a", title: "Series audit", description: "", location: "", category: "event", startLocal: base + "T09:00:00", endLocal: base + "T10:00:00", timezone: "Asia/Shanghai", allDay: false, rrule: "FREQ=WEEKLY;COUNT=5", color: "#34785c" };
+    const occurrence = { ...event, eventId: event.id, occurrenceId: "repeat-date", originalStartLocal: day + "T09:00:00", startUtc: day + "T01:00:00Z", endUtc: day + "T02:00:00Z", displayTimezone: "Asia/Shanghai" };
+    const original = invoke.getMockImplementation()!;
+    invoke.mockImplementation((command: string, args: unknown) => {
+      if (command === "get_calendar_occurrences") return Promise.resolve([occurrence]);
+      if (command === "get_personal_event" || command === "update_personal_event") return Promise.resolve(event);
+      return original(command, args);
+    });
+    return { event, occurrence };
+  }
+
+  it("edits the original series without changing its anchor or dropping its end condition", async () => {
+    const { event } = recurringFixture();
+    const user = userEvent.setup(); render(<App />);
+    await user.click(await screen.findByRole("button", { name: /Series audit/ }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "编辑范围" }), "series");
+    expect(screen.getByLabelText("开始")).toHaveValue(event.startLocal.slice(0,16));
+    await user.clear(screen.getByLabelText("标题"));
+    await user.type(screen.getByLabelText("标题"), "Renamed series");
+    await user.click(screen.getByRole("button", { name: "保存整个系列" }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("update_personal_event", { id: event.id, event: expect.objectContaining({ title: "Renamed series", startLocal: event.startLocal, endLocal: event.endLocal, rrule: event.rrule }) }));
+  });
+
+  it("defaults to editing one recurrence and leaves the series untouched", async () => {
+    const { event, occurrence } = recurringFixture();
+    const user = userEvent.setup(); render(<App />);
+    await user.click(await screen.findByRole("button", { name: /Series audit/ }));
+    expect(screen.getByRole("combobox", { name: "编辑范围" })).toHaveValue("single");
+    await user.click(screen.getByRole("button", { name: "保存此项" }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("set_recurrence_exception", expect.objectContaining({ eventId: event.id, originalStartLocal: occurrence.originalStartLocal, kind: "override", overrideValue: expect.objectContaining({ startLocal: occurrence.originalStartLocal }) })));
+    expect(invoke.mock.calls.some(([command]) => command === "update_personal_event")).toBe(false);
+  });
+
+  it("shows overnight events on both days in week and month views", async () => {
+    const { occurrence } = recurringFixture();
+    const monday = new Date(occurrence.originalStartLocal.slice(0,10) + "T00:00:00Z");
+    monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+    const tuesday = new Date(monday); tuesday.setUTCDate(tuesday.getUTCDate() + 1);
+    const overnight = { ...occurrence, title: "Overnight", startUtc: monday.toISOString().slice(0,10) + "T14:00:00Z", endUtc: tuesday.toISOString().slice(0,10) + "T02:00:00Z" };
+    const original = invoke.getMockImplementation()!;
+    invoke.mockImplementation((command: string, args: unknown) => command === "get_calendar_occurrences" ? Promise.resolve([overnight]) : original(command, args));
+    const user = userEvent.setup(); const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelectorAll(".event-block")).toHaveLength(2));
+    const blocks = container.querySelectorAll<HTMLElement>(".event-block");
+    expect(blocks[0].style.height).toBe("128px");
+    expect(blocks[1].style.top).toBe("0px");
+    expect(blocks[1].style.height).toBe("192px");
+    await user.click(screen.getByRole("button", { name: "月" }));
+    await waitFor(() => expect(container.querySelectorAll(".month-event")).toHaveLength(2));
+  });
 });

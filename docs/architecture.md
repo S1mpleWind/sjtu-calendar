@@ -36,3 +36,11 @@ SJTU term suggestions are bundled only for terms whose first teaching Monday was
 ## Desktop Widget (`feat/desktop-widget`)
 
 The optional frameless Widget is a separate Tauri window that reads calendar, SJTU, and Canvas data through the same Rust/SQLite commands as the main window. It does not perform a second sync or use demo data. On launch, the compact Widget is visible while the main window stays hidden in the tray; the Widget's “主程序” control opens the main window. Window bounds are persisted with Tauri's window-state plugin without restoring visibility, and always-on-top is opt-in and stored in app data. A system tray menu opens the main window, toggles the Widget, or exits the application. Clicking an item routes to its detail in the main window. Closing either app window hides it so the tray remains available.
+
+## Calendar consistency fixes (2026-10-23)
+
+Successful backend writes broadcast `calendar-data-changed`; both windows reload their cache on that event and on focus. The main window also broadcasts display-timezone changes to the Widget. Request sequence guards prevent older reads from replacing newer results.
+
+Recurrence editing explicitly selects single or series scope before editing. Series scope loads the original event and retains its full RRULE. Range queries also inspect overridden identities whose original occurrence lies outside the requested dates. Day grouping spans every overlapping date with exclusive end boundaries, retaining the original occurrence identity for edits.
+
+Canvas caches are selected by an explicitly verified user ID, rather than the most recent sync timestamp. Replacing credentials invalidates that selection and rotates a revision; in-flight tests/syncs must match the revision before binding an account or applying data. Backup restore invalidates that binding because credentials are outside the database.

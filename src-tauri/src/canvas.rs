@@ -7,6 +7,8 @@ use std::{path::Path, str::FromStr, time::Duration};
 
 const SERVICE: &str = "edu.sjtu.schedule.canvas";
 const INSTANCE_SETTING: &str = "canvas.instance_url";
+const USER_SETTING: &str = "canvas.active_user_id";
+const REVISION_SETTING: &str = "canvas.credential_revision";
 const PAGE_LIMIT: usize = 200;
 const ITEM_LIMIT: usize = 20_000;
 const COURSE_LIMIT: usize = 250;
@@ -16,6 +18,7 @@ const COURSE_LIMIT: usize = 250;
 pub struct CanvasConnectionStatus {
     pub configured: bool,
     pub instance_url: Option<String>,
+    pub account_verified: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -321,6 +324,8 @@ pub fn connection_status(path: &Path) -> Result<CanvasConnectionStatus, String> 
     Ok(CanvasConnectionStatus {
         configured,
         instance_url,
+        account_verified: read_setting(&Connection::open(path).map_err(db_error)?, USER_SETTING)?
+            .is_some(),
     })
 }
 
@@ -353,8 +358,11 @@ pub fn save_credentials(path: &Path, instance: &str, token: &str) -> Result<(), 
     entry
         .set_password(token.trim())
         .map_err(|_| "Could not save the token to Windows Credential Manager".to_string())?;
-    let connection = Connection::open(path).map_err(db_error)?;
-    connection.execute("INSERT INTO app_settings(key,value_json) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')", params![INSTANCE_SETTING, serde_json::to_string(&normalized).map_err(|_| "Could not encode Canvas instance".to_string())?]).map_err(db_error)?;
+    let mut connection = Connection::open(path).map_err(db_error)?;
+    let transaction = connection.transaction().map_err(db_error)?;
+    write_setting(&transaction, INSTANCE_SETTING, &normalized)?;
+    reset_account(&transaction)?;
+    transaction.commit().map_err(db_error)?;
     Ok(())
 }
 
@@ -368,10 +376,13 @@ pub fn clear_credentials(path: &Path) -> Result<(), String> {
             Err(_) => (),
         }
     }
-    Connection::open(path)
-        .map_err(db_error)?
+    let mut connection = Connection::open(path).map_err(db_error)?;
+    let transaction = connection.transaction().map_err(db_error)?;
+    transaction
         .execute("DELETE FROM app_settings WHERE key=?1", [INSTANCE_SETTING])
         .map_err(db_error)?;
+    reset_account(&transaction)?;
+    transaction.commit().map_err(db_error)?;
     Ok(())
 }
 
@@ -383,8 +394,64 @@ fn load_token(instance: &str) -> Result<String, String> {
 
 pub async fn test_connection(path: &Path) -> Result<CanvasProfile, String> {
     let instance = get_instance(path)?.ok_or("Configure a Canvas instance first")?;
+    let revision = read_setting(&Connection::open(path).map_err(db_error)?, REVISION_SETTING)?
+        .unwrap_or_default();
     let token = load_token(&instance)?;
-    CanvasClient::new(&instance)?.verify(&token).await
+    let profile = CanvasClient::new(&instance)?.verify(&token).await?;
+    let mut connection = Connection::open(path).map_err(db_error)?;
+    let transaction = connection.transaction().map_err(db_error)?;
+    check_session(&transaction, &instance, &revision)?;
+    write_setting(&transaction, USER_SETTING, &profile.user_id)?;
+    transaction.commit().map_err(db_error)?;
+    Ok(profile)
+}
+
+fn read_setting(connection: &Connection, key: &str) -> Result<Option<String>, String> {
+    let value: Option<String> = connection
+        .query_row(
+            "SELECT value_json FROM app_settings WHERE key=?1",
+            [key],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(db_error)?;
+    value
+        .map(|json| {
+            serde_json::from_str(&json).map_err(|_| "Invalid Canvas account setting".to_string())
+        })
+        .transpose()
+}
+
+fn write_setting(connection: &Connection, key: &str, value: &str) -> Result<(), String> {
+    connection.execute("INSERT INTO app_settings(key,value_json) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json", params![key, serde_json::to_string(value).map_err(|_| "Invalid Canvas setting".to_string())?]).map_err(db_error)?;
+    Ok(())
+}
+
+fn reset_account(connection: &Connection) -> Result<(), String> {
+    connection
+        .execute("DELETE FROM app_settings WHERE key=?1", [USER_SETTING])
+        .map_err(db_error)?;
+    write_setting(
+        connection,
+        REVISION_SETTING,
+        &uuid::Uuid::new_v4().to_string(),
+    )
+}
+
+pub fn invalidate_cached_identity(path: &Path) -> Result<(), String> {
+    let mut connection = Connection::open(path).map_err(db_error)?;
+    let transaction = connection.transaction().map_err(db_error)?;
+    reset_account(&transaction)?;
+    transaction.commit().map_err(db_error)
+}
+
+fn check_session(connection: &Connection, instance: &str, revision: &str) -> Result<(), String> {
+    if read_setting(connection, INSTANCE_SETTING)?.as_deref() != Some(instance)
+        || read_setting(connection, REVISION_SETTING)?.unwrap_or_default() != revision
+    {
+        return Err("Canvas 账户配置已变更，请重新测试连接或同步".into());
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -438,6 +505,8 @@ fn assignment_row(course: &CourseWire, assignment: AssignmentWire, base: &Url) -
 
 pub async fn sync(path: &Path) -> Result<CanvasSyncResult, String> {
     let instance = get_instance(path)?.ok_or("Configure a Canvas instance first")?;
+    let revision = read_setting(&Connection::open(path).map_err(db_error)?, REVISION_SETTING)?
+        .unwrap_or_default();
     let token = load_token(&instance)?;
     let client = CanvasClient::new(&instance)?;
     let profile = client.verify(&token).await?;
@@ -485,6 +554,7 @@ pub async fn sync(path: &Path) -> Result<CanvasSyncResult, String> {
         &assignments,
         sync_state,
         &failed_courses,
+        &revision,
     )
 }
 
@@ -500,6 +570,7 @@ fn apply_sync(
     assignments: &[AssignmentRow],
     state: &str,
     failed_courses: &[String],
+    revision: &str,
 ) -> Result<CanvasSyncResult, String> {
     let mut connection = Connection::open(path).map_err(db_error)?;
     connection
@@ -514,6 +585,7 @@ fn apply_sync(
         assignments,
         state,
         failed_courses,
+        revision,
     )
 }
 
@@ -525,7 +597,9 @@ fn apply_sync_transaction(
     assignments: &[AssignmentRow],
     state: &str,
     failed_courses: &[String],
+    revision: &str,
 ) -> Result<CanvasSyncResult, String> {
+    check_session(&transaction, instance, revision)?;
     let synced_at = Utc::now().to_rfc3339();
     if state == "succeeded" {
         transaction
@@ -556,6 +630,7 @@ fn apply_sync_transaction(
         ))
     };
     transaction.execute("INSERT INTO canvas_sync_state(instance_url,user_id,state,last_sync_at,last_success_at,course_count,assignment_count,error_summary) VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(instance_url,user_id) DO UPDATE SET state=excluded.state,last_sync_at=excluded.last_sync_at,last_success_at=CASE WHEN excluded.state='succeeded' THEN excluded.last_sync_at ELSE canvas_sync_state.last_success_at END,course_count=excluded.course_count,assignment_count=excluded.assignment_count,error_summary=excluded.error_summary", params![instance, profile.user_id, state, synced_at, if state == "succeeded" { Some(synced_at.as_str()) } else { None }, courses.len() as i64, assignments.len() as i64, error_summary]).map_err(db_error)?;
+    write_setting(&transaction, USER_SETTING, &profile.user_id)?;
     transaction.commit().map_err(db_error)?;
     Ok(CanvasSyncResult {
         state: state.to_string(),
@@ -564,6 +639,25 @@ fn apply_sync_transaction(
         failed_courses: failed_courses.to_vec(),
         synced_at,
     })
+}
+
+pub fn last_success(path: &Path) -> Result<Option<String>, String> {
+    let Some(instance) = get_instance(path)? else {
+        return Ok(None);
+    };
+    let connection = Connection::open(path).map_err(db_error)?;
+    let Some(user_id) = read_setting(&connection, USER_SETTING)? else {
+        return Ok(None);
+    };
+    Ok(connection
+        .query_row(
+            "SELECT last_success_at FROM canvas_sync_state WHERE instance_url=?1 AND user_id=?2",
+            params![instance, user_id],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .optional()
+        .map_err(db_error)?
+        .flatten())
 }
 
 pub fn deadlines(
@@ -576,7 +670,7 @@ pub fn deadlines(
         return Ok(Vec::new());
     };
     let connection = Connection::open(path).map_err(db_error)?;
-    let user_id = connection.query_row("SELECT user_id FROM canvas_sync_state WHERE instance_url=?1 ORDER BY last_sync_at DESC LIMIT 1", [&instance], |row| row.get::<_, String>(0)).optional().map_err(db_error)?;
+    let user_id = read_setting(&connection, USER_SETTING)?;
     let Some(user_id) = user_id else {
         return Ok(Vec::new());
     };
@@ -598,15 +692,7 @@ pub fn set_local_completed(
 ) -> Result<(), String> {
     let instance = get_instance(path)?.ok_or("Configure a Canvas instance first")?;
     let connection = Connection::open(path).map_err(db_error)?;
-    let user_id = connection
-        .query_row(
-            "SELECT user_id FROM canvas_sync_state WHERE instance_url=?1 ORDER BY last_sync_at DESC LIMIT 1",
-            [&instance],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .map_err(db_error)?
-        .ok_or("No Canvas cache is available")?;
+    let user_id = read_setting(&connection, USER_SETTING)?.ok_or("No Canvas cache is available")?;
     let changed = connection.execute("UPDATE canvas_assignments SET local_completed=?5 WHERE instance_url=?1 AND user_id=?2 AND course_id=?3 AND assignment_id=?4 AND archived=0", params![instance,user_id,course_id,assignment_id,completed]).map_err(db_error)?;
     if changed == 0 {
         return Err("Canvas assignment was not found in the local cache".into());
@@ -774,6 +860,7 @@ mod tests {
             ],
             "succeeded",
             &[],
+            "",
         )
         .unwrap();
         set_local_completed(&path, "7", "9", true).unwrap();
@@ -785,6 +872,7 @@ mod tests {
             &[assignment("Quiz revised", "2026-10-23T10:00:00Z", "9")],
             "partial",
             &["Physics".into()],
+            "",
         )
         .unwrap();
         let connection = Connection::open(&path).unwrap();
@@ -817,8 +905,52 @@ mod tests {
         connection.execute("INSERT INTO canvas_courses(instance_url,user_id,course_id,name,workflow_state,synced_at) VALUES('https://oc.sjtu.edu.cn','42','7','Physics','available','2026-10-20T00:00:00Z')", []).unwrap();
         connection.execute("INSERT INTO canvas_assignments(instance_url,user_id,course_id,assignment_id,course_name,name,due_at,synced_at) VALUES('https://oc.sjtu.edu.cn','42','7','9','Physics','Quiz','2026-10-21T10:00:00Z','2026-10-20T00:00:00Z')", []).unwrap();
         drop(connection);
+        write_setting(&Connection::open(&path).unwrap(), USER_SETTING, "42").unwrap();
         let rows = deadlines(&path, "2026-10-21", "2026-10-21", "Asia/Shanghai").unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "Quiz");
+        let connection = Connection::open(&path).unwrap();
+        // Replacing credentials immediately hides the previous account's cache.
+        reset_account(&connection).unwrap();
+        assert!(
+            deadlines(&path, "2026-10-21", "2026-10-21", "Asia/Shanghai")
+                .unwrap()
+                .is_empty()
+        );
+        assert!(set_local_completed(&path, "7", "9", true).is_err());
+        // A request started before replacement cannot reactivate that account.
+        let profile = CanvasProfile {
+            user_id: "42".into(),
+            name: "Old account".into(),
+            instance_url: "https://oc.sjtu.edu.cn".into(),
+        };
+        assert!(
+            apply_sync(
+                &path,
+                "https://oc.sjtu.edu.cn",
+                &profile,
+                &[],
+                &[],
+                "succeeded",
+                &[],
+                ""
+            )
+            .is_err()
+        );
+        // Explicit selection wins over last-sync timestamp, without a network call.
+        connection.execute("INSERT INTO canvas_sync_state(instance_url,user_id,state,last_sync_at,course_count,assignment_count) VALUES('https://oc.sjtu.edu.cn','84','succeeded','2020-01-01T00:00:00Z',0,0)", []).unwrap();
+        write_setting(&connection, USER_SETTING, "84").unwrap();
+        assert!(
+            deadlines(&path, "2026-10-21", "2026-10-21", "Asia/Shanghai")
+                .unwrap()
+                .is_empty()
+        );
+        write_setting(&connection, USER_SETTING, "42").unwrap();
+        assert_eq!(
+            deadlines(&path, "2026-10-21", "2026-10-21", "Asia/Shanghai")
+                .unwrap()
+                .len(),
+            1
+        );
     }
 }

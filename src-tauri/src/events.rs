@@ -2,7 +2,7 @@ use chrono::{DateTime, Duration, LocalResult, NaiveDate, NaiveDateTime, NaiveTim
 use chrono_tz::Tz;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use std::{path::Path, str::FromStr};
+use std::{collections::BTreeSet, path::Path, str::FromStr};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -274,6 +274,11 @@ fn set_exception_on(
             ("cancelled", None) => None,
             ("override", Some(value)) => {
                 let mut draft = event.draft.clone();
+                let (base_start, base_end) = validate(&draft)?;
+                draft.start_local = original_dt.format("%Y-%m-%dT%H:%M:%S").to_string();
+                draft.end_local = (original_dt + (base_end - base_start))
+                    .format("%Y-%m-%dT%H:%M:%S")
+                    .to_string();
                 if let Some(v) = value.title {
                     draft.title = v;
                 }
@@ -310,6 +315,17 @@ fn set_exception_on(
                     .into(),
             ),
         };
+    if !recurrence_contains(&event, original_dt)? {
+        return Err("Exception date is not an occurrence in this series".into());
+    }
+    connection.execute(
+        "INSERT INTO recurrence_exceptions (id,event_id,original_start_local,kind,override_json,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?6) ON CONFLICT(event_id,original_start_local) DO UPDATE SET kind=excluded.kind,override_json=excluded.override_json,updated_at=excluded.updated_at",
+        params![Uuid::new_v4().to_string(), event_id, original, kind, override_json, now()],
+    ).map_err(db_error)?;
+    Ok(())
+}
+
+fn recurrence_contains(event: &PersonalEvent, original_dt: NaiveDateTime) -> Result<bool, String> {
     let start = parse_local(&event.draft.start_local)?;
     let rule = event
         .draft
@@ -328,21 +344,13 @@ fn set_exception_on(
     let upper = (original_dt + Duration::seconds(1))
         .and_utc()
         .with_timezone(&rrule::Tz::UTC);
-    let is_occurrence = recurrence
+    Ok(recurrence
         .after(lower)
         .before(upper)
         .all(2)
         .dates
         .iter()
-        .any(|date| date.naive_utc() == original_dt);
-    if !is_occurrence {
-        return Err("Exception date is not an occurrence in this series".into());
-    }
-    connection.execute(
-        "INSERT INTO recurrence_exceptions (id,event_id,original_start_local,kind,override_json,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?6) ON CONFLICT(event_id,original_start_local) DO UPDATE SET kind=excluded.kind,override_json=excluded.override_json,updated_at=excluded.updated_at",
-        params![Uuid::new_v4().to_string(), event_id, original, kind, override_json, now()],
-    ).map_err(db_error)?;
-    Ok(())
+        .any(|date| date.naive_utc() == original_dt))
 }
 
 #[derive(Deserialize)]
@@ -364,11 +372,10 @@ fn localize_occurrence(
         .timezone
         .parse()
         .map_err(|_| "Unknown event timezone".to_string())?;
-    let Some(start) = resolve_recurrence_start(event_tz, original_start) else {
-        return Ok(None);
-    };
-    let end = start + duration;
     let mut draft = event.draft.clone();
+    let is_override = exception
+        .as_ref()
+        .is_some_and(|value| value.kind == "override");
     if let Some(exception) = exception {
         match exception.kind.as_str() {
             "cancelled" => return Ok(None),
@@ -385,11 +392,7 @@ fn localize_occurrence(
             _ => return Err("Invalid recurrence exception".into()),
         }
     }
-    let (start_dt, end_dt) = if draft.rrule.is_none()
-        && (draft.start_local != event.draft.start_local
-            || draft.end_local != event.draft.end_local
-            || draft.timezone != event.draft.timezone)
-    {
+    let (start_dt, end_dt) = if is_override {
         let (resolved_start, resolved_end) = validate(&draft)?;
         let event_tz: Tz = draft
             .timezone
@@ -400,7 +403,10 @@ fn localize_occurrence(
             resolve_local(event_tz, resolved_end)?,
         )
     } else {
-        (start, end)
+        let Some(start) = resolve_recurrence_start(event_tz, original_start) else {
+            return Ok(None);
+        };
+        (start, start + duration)
     };
     Ok(Some(CalendarOccurrence {
         occurrence_id: format!(
@@ -489,6 +495,21 @@ pub fn calendar_occurrences_on(
         } else {
             vec![base_start]
         };
+        let mut starts: BTreeSet<_> = starts.into_iter().collect();
+        // An override can move into this range from an original date outside it.
+        // Include those identities, then apply the same final UTC overlap filter.
+        if event.draft.rrule.is_some() {
+            let mut moved_stmt = connection.prepare("SELECT original_start_local FROM recurrence_exceptions WHERE event_id=?1 AND kind='override'").map_err(db_error)?;
+            let moved = moved_stmt
+                .query_map([&event.id], |row| row.get::<_, String>(0))
+                .map_err(db_error)?;
+            for original in moved {
+                let original = parse_local(&original.map_err(db_error)?)?;
+                if !starts.contains(&original) && recurrence_contains(&event, original)? {
+                    starts.insert(original);
+                }
+            }
+        }
         let mut exception_stmt = connection.prepare("SELECT kind,override_json FROM recurrence_exceptions WHERE event_id=?1 AND original_start_local=?2").map_err(db_error)?;
         for occurrence_start in starts {
             let original = occurrence_start.format("%Y-%m-%dT%H:%M:%S").to_string();
@@ -657,6 +678,114 @@ mod tests {
         assert_eq!(moved.start_utc, "2026-11-04T12:00:00+00:00");
         assert_eq!(moved.display_timezone, "Asia/Tokyo");
         assert_eq!(results[0].original_start_local, "2026-10-28T23:30:00");
+    }
+
+    #[test]
+    fn moved_occurrence_is_found_by_destination_range_without_duplicates() {
+        let connection = database();
+        let created = create_event_on(
+            &connection,
+            event(
+                "2026-10-19T09:00:00",
+                "2026-10-19T10:00:00",
+                Some("FREQ=WEEKLY;COUNT=3"),
+            ),
+        )
+        .unwrap();
+        let change = serde_json::from_value(serde_json::json!({
+            "startLocal": "2026-11-10T23:30:00", "endLocal": "2026-11-11T01:00:00"
+        }))
+        .unwrap();
+        set_exception_on(
+            &connection,
+            &created.id,
+            "2026-10-19T09:00:00".into(),
+            "override".into(),
+            Some(change),
+        )
+        .unwrap();
+        assert!(
+            calendar_occurrences_on(&connection, "2026-10-19", "2026-10-19", "Asia/Shanghai")
+                .unwrap()
+                .is_empty()
+        );
+        let destination =
+            calendar_occurrences_on(&connection, "2026-11-09", "2026-11-15", "Asia/Shanghai")
+                .unwrap();
+        assert_eq!(destination.len(), 1);
+        assert_eq!(destination[0].original_start_local, "2026-10-19T09:00:00");
+        assert_eq!(
+            calendar_occurrences_on(&connection, "2026-11-11", "2026-11-11", "Asia/Shanghai")
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            calendar_occurrences_on(&connection, "2026-10-01", "2026-11-30", "Asia/Shanghai")
+                .unwrap()
+                .len(),
+            3
+        );
+        set_exception_on(
+            &connection,
+            &created.id,
+            "2026-10-19T09:00:00".into(),
+            "cancelled".into(),
+            None,
+        )
+        .unwrap();
+        assert!(
+            calendar_occurrences_on(&connection, "2026-11-09", "2026-11-15", "Asia/Shanghai")
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn override_preserves_its_occurrence_date_and_can_move_back_to_series_start() {
+        let connection = database();
+        let created = create_event_on(
+            &connection,
+            event(
+                "2026-10-19T09:00:00",
+                "2026-10-19T10:00:00",
+                Some("FREQ=WEEKLY;COUNT=3"),
+            ),
+        )
+        .unwrap();
+        let change = serde_json::from_value(serde_json::json!({"title":"Renamed once"})).unwrap();
+        set_exception_on(
+            &connection,
+            &created.id,
+            "2026-10-26T09:00:00".into(),
+            "override".into(),
+            Some(change),
+        )
+        .unwrap();
+        let once =
+            calendar_occurrences_on(&connection, "2026-10-26", "2026-10-26", "Asia/Shanghai")
+                .unwrap();
+        assert_eq!(once.len(), 1);
+        assert_eq!(once[0].start_utc, "2026-10-26T01:00:00+00:00");
+        let change = serde_json::from_value(serde_json::json!({"startLocal":"2026-10-19T09:00:00","endLocal":"2026-10-19T10:00:00"})).unwrap();
+        set_exception_on(
+            &connection,
+            &created.id,
+            "2026-10-26T09:00:00".into(),
+            "override".into(),
+            Some(change),
+        )
+        .unwrap();
+        let moved =
+            calendar_occurrences_on(&connection, "2026-10-19", "2026-10-19", "Asia/Shanghai")
+                .unwrap();
+        assert_eq!(moved.len(), 2);
+        assert_ne!(moved[0].occurrence_id, moved[1].occurrence_id);
+        assert!(
+            calendar_occurrences_on(&connection, "2026-10-26", "2026-10-26", "Asia/Shanghai")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

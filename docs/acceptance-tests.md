@@ -91,3 +91,9 @@
 - [x] The Widget's “主程序” control calls the main-window wake command.
 - [x] `cargo fmt --check`, `cargo test`, `pnpm lint`, `pnpm test`, `pnpm build`; Windows `pnpm tauri build` result is recorded in `docs/development-log.md`.
 - [ ] Manual native acceptance: verify startup shows only the compact Widget while the main window stays in the tray; show/hide/quit via tray; visually inspect transparency/Mica; drag, resize, restart with saved bounds, test always-on-top and click-through. Test on a second display if available.
+# Calendar consistency regression checks — 2026-10-23
+
+- Frontend: `pnpm lint`, `pnpm test` (25 passed), and `pnpm build` passed.
+- Rust: `cargo test` (23 passed); regression coverage includes moved recurrence lookup, preserving dates for title-only overrides, moving an instance back to the series start, explicit account selection, invalidating stale account requests, and resetting identity on restore.
+- UI regression coverage includes preserving original series dates/full RRULE, single-occurrence saves, overnight segmentation in week/month views, midnight exclusivity, DST date grouping, Widget data/timezone notifications, listener cleanup, and out-of-order cache reads.
+- Not rechecked manually: packaged dual-window notification delivery, native Widget rendering, and real Canvas/SJTU authentication. Fixture/API-command tests are not a claim of live account validation.
