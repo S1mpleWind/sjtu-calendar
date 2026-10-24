@@ -9,10 +9,11 @@ export default function LongTermChecklist() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
-  const sequence = useRef(0);
+  const sequence = useRef<symbol | null>(null);
 
   const refresh = useCallback(async () => {
-    const request = ++sequence.current;
+    const request = Symbol();
+    sequence.current = request;
     try {
       const rows = await listLongTermItems();
       if (request === sequence.current) { setItems(rows); setError(""); }
@@ -25,7 +26,7 @@ export default function LongTermChecklist() {
   useCalendarUpdates(refresh);
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(), 0);
-    return () => { window.clearTimeout(timer); sequence.current++; };
+    return () => { window.clearTimeout(timer); sequence.current = null; };
   }, [refresh]);
 
   async function save(action: () => Promise<void>) {
