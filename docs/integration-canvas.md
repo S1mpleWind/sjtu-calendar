@@ -20,5 +20,5 @@ Open Settings, choose the instance, enter a personal access token generated in C
 
 - The host allowlist is limited to the two origins above.
 - Assignment `due_at` is used for calendar placement. The API request includes `all_dates` and `overrides`, but section-specific date sets are not yet separately projected.
-- Completion checkboxes are local reminders; they do not submit assignments or update Canvas.
+- Completion checkboxes automatically reflect cached Canvas submissions (`submitted_at`, or submission `workflow_state` of `submitted`, `pending_review`, or `graded`). Week/month views, the DDL overview and Widget use the same rule. Submitted work is checked and cannot be unchecked locally; the current state is re-evaluated after every sync. Manual completion remains a separate local flag, survives refresh, and does not submit assignments or update Canvas. A locally completed but unsubmitted assignment is labeled accordingly.
 - Real login, token validity, service availability and rate limiting require the user's live acceptance. Tokens must not be sent in chat or added to logs.

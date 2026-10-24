@@ -49,6 +49,34 @@ describe("calendar window", () => {
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("sync_canvas"));
   });
 
+  it("automatically checks submitted Canvas assignments after sync in week and month views", async () => {
+    const user = userEvent.setup();
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    let submitted = false;
+    const original = invoke.getMockImplementation()!;
+    invoke.mockImplementation((command: string, args: unknown) => {
+      if (command === "get_canvas_connection_status") return Promise.resolve({ configured: true, instanceUrl: "https://oc.sjtu.edu.cn" });
+      if (command === "get_canvas_deadlines") return Promise.resolve([{ instanceUrl: "https://oc.sjtu.edu.cn", userId: "42", courseId: "7", assignmentId: "9", title: "同步提交状态", courseName: "程序设计", dueAt: day + "T15:59:00Z", submittedAt: null, workflowState: submitted ? "submitted" : "unsubmitted", localCompleted: false }]);
+      if (command === "sync_canvas") {
+        submitted = !submitted;
+        return Promise.resolve({ state: "succeeded", courseCount: 1, assignmentCount: 1, failedCourses: [], syncedAt: new Date().toISOString() });
+      }
+      return original(command, args);
+    });
+    render(<App />);
+    expect(await screen.findByRole("checkbox", { name: "标记 同步提交状态 完成" })).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: "刷新 Canvas 作业" }));
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "标记 同步提交状态 完成" })).toBeChecked());
+    expect(screen.getByRole("checkbox", { name: "标记 同步提交状态 完成" })).toBeDisabled();
+    expect(screen.getByText(/已提交 · 程序设计/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "月" }));
+    expect(await screen.findByRole("checkbox", { name: "标记 同步提交状态 完成" })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "刷新 Canvas 作业" }));
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "标记 同步提交状态 完成" })).not.toBeChecked());
+    expect(screen.getByRole("checkbox", { name: "标记 同步提交状态 完成" })).toBeEnabled();
+    expect(invoke.mock.calls.some(([command]) => command === "set_canvas_assignment_completed")).toBe(false);
+  });
+
   it("opens an editor and persists a new local event through Tauri", async () => {
     const user = userEvent.setup();
     render(<App />);

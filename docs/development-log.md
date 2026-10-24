@@ -181,3 +181,12 @@
 - NSIS artifact: `src-tauri/target/release/bundle/nsis/SJTU Schedule_1.1.0_x64-setup.exe`, 3,586,924 bytes; SHA-256 `497CBCF5DB71EDEF1AA18D01A3DEF496610A78314102731BA04EDD479D53C090`.
 - Published latest stable release: https://github.com/S1mpleWind/sjtu-calendar/releases/tag/v1.1.0. GitHub reports the asset uploaded, non-draft/non-prerelease; the asset digest matches the local SHA-256 and the remote tag resolves to the source commit above.
 - Native installation and live external authentication remain unverified, as stated in the release notes.
+
+## Canvas submitted-work completion — 2026-10-24
+
+- Branch: `fix/canvas-submission-completion`.
+- Cause: Rust sync already cached submission state/timestamp, but the week/month assignment strip only read `localCompleted`; Widget also missed completed workflow states when no timestamp was present.
+- Fix: shared Canvas completion/status helpers now drive week/month checkboxes, details, the monthly DDL overview and Widget filtering. Submitted, pending-review and graded work is automatically checked; manual completion stays separate and is preserved by sync. The assignment strip shows submission state explicitly. Remote-completed checkboxes are read-only, matching the overview.
+- Official reference checked: https://developerdocs.instructure.com/services/canvas/resources/assignments and https://developerdocs.instructure.com/services/canvas/resources/submissions (submission fields and include[]=submission).
+- Verification: `pnpm lint`, `pnpm test` (36 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (24 passed), and `git diff --check` passed. Regression tests simulate sync from unsubmitted to submitted and back, check week/month UI, preserve manual-vs-remote semantics and exclude submitted/graded/pending-review work from Widget pending deadlines.
+- Actual account status: fixture verified only; no credentials were read and no live Canvas synchronization was claimed. Native Windows visual review remains outstanding. Installer result is recorded after packaging.

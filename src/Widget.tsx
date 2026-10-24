@@ -9,6 +9,7 @@ import {
 import "./widget.css";
 import { occursOnDay } from "./lib/calendar-days";
 import { useCalendarUpdates } from "./lib/calendar-updates";
+import { canvasCompleted } from "./lib/canvas-status";
 
 function addDays(date: string, amount: number) {
   const value = new Date(date + "T00:00:00Z");
@@ -113,7 +114,7 @@ export default function Widget() {
   const upcomingDeadlines = useMemo<DeadlineItem[]>(() => [
     ...events.filter((item) => item.category === "deadline")
       .map((value) => ({ kind: "local" as const, dueAt: value.startUtc, value })),
-    ...canvasDeadlines.filter((item) => !item.localCompleted && !item.submittedAt)
+    ...canvasDeadlines.filter((item) => !canvasCompleted(item))
       .map((value) => ({ kind: "canvas" as const, dueAt: value.dueAt, value })),
   ].sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt)).slice(0, 6), [canvasDeadlines, events]);
 

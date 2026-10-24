@@ -14,6 +14,7 @@ import { dayMinutes, groupByDay } from "./lib/calendar-days";
 import { useCalendarUpdates } from "./lib/calendar-updates";
 import DdlOverview from "./DdlOverview";
 import { buildOverviewItems, type OverviewItem } from "./lib/ddl-overview";
+import { canvasCompleted, canvasRemotelyCompleted, canvasSubmissionLabel } from "./lib/canvas-status";
 
 type View = "week" | "month" | "overview";
 type EditorState = { event?: PersonalEvent; occurrence?: CalendarOccurrence; date: string; startTime?: string };
@@ -546,7 +547,7 @@ function CourseDetails({ course, onClose, onSaveNote }: { course: SjtuCourseOccu
 
 function CanvasAssignmentDetails({ deadline, timezone, onClose }: { deadline: CanvasDeadline; timezone: string; onClose: () => void }) {
   const due = new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, dateStyle: "full", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(deadline.dueAt));
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="event-modal course-details" role="dialog" aria-modal="true" aria-labelledby="canvas-details-title"><header className="modal-header"><div><p className="eyebrow">Canvas 作业</p><h2 id="canvas-details-title">{deadline.title}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header><div className="form-scroll"><p><strong>课程：</strong>{deadline.courseName}</p><p><strong>截止：</strong>{due}</p><p><strong>提交状态：</strong>{deadline.submittedAt ? "已提交" : deadline.localCompleted ? "已在本地标记完成" : "未完成"}</p>{deadline.description && <p className="canvas-detail-description">{deadline.description}</p>}<p><strong>Canvas 链接：</strong><a href={deadline.htmlUrl} target="_blank" rel="noreferrer">{deadline.htmlUrl}</a></p></div><footer className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>关闭</button></footer></section></div>;
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="event-modal course-details" role="dialog" aria-modal="true" aria-labelledby="canvas-details-title"><header className="modal-header"><div><p className="eyebrow">Canvas 作业</p><h2 id="canvas-details-title">{deadline.title}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header><div className="form-scroll"><p><strong>课程：</strong>{deadline.courseName}</p><p><strong>截止：</strong>{due}</p><p><strong>提交状态：</strong>{canvasSubmissionLabel(deadline)}</p>{deadline.description && <p className="canvas-detail-description">{deadline.description}</p>}<p><strong>Canvas 链接：</strong><a href={deadline.htmlUrl} target="_blank" rel="noreferrer">{deadline.htmlUrl}</a></p></div><footer className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>关闭</button></footer></section></div>;
 }
 
 function intervalLabel(startUtc: string, endUtc: string, timezone: string) {
@@ -555,7 +556,7 @@ function intervalLabel(startUtc: string, endUtc: string, timezone: string) {
 }
 
 function CanvasDeadlineStrip({ days, deadlines, timezone, onComplete }: { days: string[]; deadlines: Map<string, CanvasDeadline[]>; timezone: string; onComplete: (item: CanvasDeadline, completed: boolean) => void }) {
-  return <section className="canvas-strip" aria-label="Canvas 截止事项">{days.map((day) => <div className="canvas-strip-day" key={day}>{(deadlines.get(day) ?? []).map((item) => <div className={`canvas-deadline ${item.localCompleted ? "completed" : ""}`} key={`${item.courseId}-${item.assignmentId}`}><label><input type="checkbox" aria-label={`标记 ${item.title} 完成`} checked={item.localCompleted} onChange={(event) => onComplete(item, event.target.checked)} /><a href={item.htmlUrl} target="_blank" rel="noreferrer" title={item.courseName}>{item.title}</a></label><small>{item.courseName} · {new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(item.dueAt))}</small></div>)}</div>)}</section>;
+  return <section className="canvas-strip" aria-label="Canvas 截止事项">{days.map((day) => <div className="canvas-strip-day" key={day}>{(deadlines.get(day) ?? []).map((item) => <div className={`canvas-deadline ${canvasCompleted(item) ? "completed" : ""}`} key={`${item.courseId}-${item.assignmentId}`}><label><input type="checkbox" aria-label={`标记 ${item.title} 完成`} checked={canvasCompleted(item)} disabled={canvasRemotelyCompleted(item)} title={canvasSubmissionLabel(item)} onChange={(event) => onComplete(item, event.target.checked)} /><a href={item.htmlUrl} target="_blank" rel="noreferrer" title={item.courseName}>{item.title}</a></label><small>{canvasSubmissionLabel(item)} · {item.courseName} · {new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(item.dueAt))}</small></div>)}</div>)}</section>;
 }
 
 function WeekView({ days, grouped, coursesByDay, selectedDate, today, timezone, onOpenCourse, onSelectDate, onOpen, onNew }: {
