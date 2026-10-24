@@ -1,4 +1,5 @@
 .ddl-overview { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 16px; flex: 1; min-height: 430px; }
+.overview-date-nav > button:first-child, .overview-date-nav > button:nth-child(3) { width: auto; padding: 0 9px; font-size: 11px; white-space: nowrap; }
 .overview-month, .overview-details { border: 1px solid #e6eae4; border-radius: 14px; background: #fff; }
 .overview-month { padding: 24px 28px; }
 .overview-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; }

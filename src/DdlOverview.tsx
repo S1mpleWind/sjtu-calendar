@@ -13,10 +13,11 @@ export default function DdlOverview({ days, selectedDate, today, timezone, items
   const completedCount = visibleItems.filter((item) => item.completed).length;
   const selectedItems = byDay.get(selectedDate) ?? [];
   const offset = (new Date(days[0] + "T12:00:00Z").getUTCDay() + 6) % 7;
+  const monthLabel = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long", timeZone: "UTC" }).format(new Date(days[0] + "T12:00:00Z"));
   const dateLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long", timeZone: "UTC" }).format(new Date(selectedDate + "T12:00:00Z"));
   return <section className="ddl-overview" aria-label="DDL 月度总览">
     <div className="overview-month">
-      <header className="overview-summary"><div><p className="eyebrow">DEADLINE OVERVIEW</p><h2>这个月的 DDL</h2><p>已完成 {completedCount} / {visibleItems.length} 项 · 按 {timezone} 归类</p></div><span className="overview-progress">{visibleItems.length ? Math.round(completedCount / visibleItems.length * 100) : 0}<small>%</small></span></header>
+      <header className="overview-summary"><div><p className="eyebrow">DEADLINE OVERVIEW</p><h2>{monthLabel}的 DDL</h2><p>已完成 {completedCount} / {visibleItems.length} 项 · 按 {timezone} 归类</p></div><span className="overview-progress">{visibleItems.length ? Math.round(completedCount / visibleItems.length * 100) : 0}<small>%</small></span></header>
       <div className="overview-legend"><span><i className="pending" />有未完成</span><span><i className="complete" />全部完成</span><span><i className="empty" />没有 DDL</span></div>
       <div className="overview-grid" aria-label="月份日期">
         {"一二三四五六日".split("").map((day) => <span className="overview-weekday" key={day}>{day}</span>)}

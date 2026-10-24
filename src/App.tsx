@@ -387,7 +387,7 @@ function App() {
       <div className="brand"><span className="brand-mark">S</span><div><strong>SJTU Schedule</strong><small>个人日历</small></div></div>
       <nav className="side-nav" aria-label="主导航">
         <button className={page === "calendar" && view !== "overview" ? "side-link active" : "side-link"} onClick={() => { setPage("calendar"); if (view === "overview") setView("week"); }} type="button"><span>▦</span>日历</button>
-        <button className={page === "calendar" && view === "overview" ? "side-link active" : "side-link"} onClick={() => { setPage("calendar"); setView("overview"); }} type="button"><span aria-hidden="true">◉</span>DDL 总览</button>
+        <button className={page === "calendar" && view === "overview" ? "side-link active" : "side-link"} onClick={() => { const currentDate = todayInZone(timezone); setSelectedDate(currentDate); setMiniMonth(currentDate); setPage("calendar"); setView("overview"); }} type="button"><span aria-hidden="true">◉</span>DDL 总览</button>
         <button className={page === "settings" ? "side-link active" : "side-link"} onClick={() => setPage("settings")} type="button"><span>⚙</span>设置</button>
       </nav>
       <section className="mini-calendar" aria-label="迷你日历">
@@ -410,7 +410,7 @@ function App() {
       <header className="topbar">
         <div className="heading"><p className="eyebrow">{page === "calendar" ? "你的安排，一目了然" : "本地偏好设置"}</p><h1>{page === "calendar" ? view === "overview" ? "DDL 总览" : "日历" : "设置"}</h1></div>
         {page === "calendar" ? <>
-          <div className="date-nav"><button aria-label="上一个时间段" onClick={() => navigate(-1)} type="button">‹</button><button className="today-button" onClick={() => { setSelectedDate(today); setMiniMonth(today); }} type="button">今天</button><button aria-label="下一个时间段" onClick={() => navigate(1)} type="button">›</button><strong>{displayMonth(selectedDate, timezone)}</strong></div>
+          <div className={`date-nav ${view === "overview" ? "overview-date-nav" : ""}`}><button aria-label={view === "overview" ? "DDL 上个月" : "上一个时间段"} title={view === "overview" ? "上个月" : undefined} onClick={() => navigate(-1)} type="button">{view === "overview" ? "‹ 上月" : "‹"}</button><button className="today-button" onClick={() => { const currentDate = todayInZone(timezone); setSelectedDate(currentDate); setMiniMonth(currentDate); }} type="button">{view === "overview" ? "本月" : "今天"}</button><button aria-label={view === "overview" ? "DDL 下个月" : "下一个时间段"} title={view === "overview" ? "下个月" : undefined} onClick={() => navigate(1)} type="button">{view === "overview" ? "下月 ›" : "›"}</button><strong>{displayMonth(selectedDate, timezone)}</strong></div>
           <div className="view-switch" role="group" aria-label="日历视图"><button className={view === "week" ? "selected" : ""} onClick={() => setView("week")} type="button">周</button><button className={view === "month" ? "selected" : ""} onClick={() => setView("month")} type="button">月</button></div>
           <button className="widget-open-button" onClick={() => void toggleWidget().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "无法打开 Widget"))} type="button">▣ Widget</button>
           <button className="new-button" onClick={() => openNew()} type="button"><span>＋</span>新建日程</button>

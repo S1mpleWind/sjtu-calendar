@@ -312,7 +312,7 @@ describe("calendar window", () => {
     await waitFor(() => expect(circle()).toHaveClass("complete"));
     await user.click(screen.getByRole("checkbox", { name: "完成 写报告" }));
     await waitFor(() => expect(circle()).toHaveClass("pending"));
-    await user.click(screen.getByRole("button", { name: "下一个时间段" }));
+    await user.click(screen.getByRole("button", { name: "DDL 下个月" }));
     const next = new Date(month + "-01T00:00:00Z"); next.setUTCMonth(next.getUTCMonth() + 1);
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("get_calendar_occurrences", expect.objectContaining({ fromDate: next.toISOString().slice(0,10), toDate: expect.any(String) })));
     expect(screen.getByRole("region", { name: "DDL 月度总览" })).toBeInTheDocument();
