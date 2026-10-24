@@ -40,7 +40,7 @@ export default function LongTermChecklist() {
   const archivedCount = items.filter((item) => item.archivedAt !== null).length;
   const visible = items.filter((item) => (item.archivedAt !== null) === showArchived);
   return <section className="overview-details long-term-checklist" aria-label="长期清单">
-    <header className="long-term-header"><div><p className="eyebrow">长期清单</p><h3>{showArchived ? "已归档" : "慢慢来，一件件完成"}</h3></div><button className="long-term-archive" type="button" aria-label={showArchived ? "返回长期清单" : "查看归档"} aria-pressed={showArchived} onClick={() => setShowArchived((value) => !value)}>{showArchived ? "返回清单" : `归档 (${archivedCount})`}</button></header>
+    <header className="long-term-header"><div><h3>{showArchived ? "已归档" : "长期清单"}</h3></div><button className="long-term-archive" type="button" aria-label={showArchived ? "返回长期清单" : "查看归档"} aria-pressed={showArchived} onClick={() => setShowArchived((value) => !value)}>{showArchived ? "返回清单" : `归档 (${archivedCount})`}</button></header>
     {!showArchived && <form className="long-term-add" onSubmit={(event) => { event.preventDefault(); const value = title.trim(); if (value) void save(async () => { await createLongTermItem(value); setTitle(""); }); }}>
       <input aria-label="新增长期事项" placeholder="添加一个长期事项…" maxLength={200} value={title} disabled={working} onChange={(event) => setTitle(event.target.value)} />
       <button type="submit" disabled={working || !title.trim()}>添加</button>
