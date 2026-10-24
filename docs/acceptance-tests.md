@@ -102,6 +102,7 @@
 ## Monthly DDL overview — 2026-10-24
 
 - `pnpm lint`, `pnpm test` (29 passed), `pnpm build`, and `cargo test` (27 passed) completed successfully.
+- `pnpm tauri build` passed; local installer `SJTU.Schedule_1.0.0_ddl-overview_15c065f_x64-setup.exe` is 3,600,019 bytes.
 - UI tests cover the sidebar entry, opt-in checkbox, monthly queries, gray empty days, red mixed-source days, yellow all-complete days, unchecking back to red, and reloading completion from backend state.
 - Rust tests cover migration v6→v7 with existing data, one-time inclusion of old local deadlines, independent recurrence completion, moves/cancellations, invalid completion requests, and backup/restore of overview state.
 - Native visual review is not claimed: Windows computer-use could not connect to its native pipe; browser inventory was empty. No account credentials or fabricated runtime sync records were used.
