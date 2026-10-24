@@ -190,3 +190,9 @@
 - Official reference checked: https://developerdocs.instructure.com/services/canvas/resources/assignments and https://developerdocs.instructure.com/services/canvas/resources/submissions (submission fields and include[]=submission).
 - Verification: `pnpm lint`, `pnpm test` (36 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (24 passed), and `git diff --check` passed. Regression tests simulate sync from unsubmitted to submitted and back, check week/month UI, preserve manual-vs-remote semantics and exclude submitted/graded/pending-review work from Widget pending deadlines.
 - Actual account status: fixture verified only; no credentials were read and no live Canvas synchronization was claimed. Native Windows visual review remains outstanding. Installer result is recorded after packaging.
+
+### Canvas completion fix packaging
+
+- Implementation commit: `a56455e62db4358fe6c26a50210ca882a20d8d5b`. `pnpm tauri build` passed.
+- Local NSIS package: `src-tauri/target/release/bundle/nsis/SJTU.Schedule_1.1.0_canvas-fix_a56455e_x64-setup.exe`, 3587884 bytes; SHA-256 `006A19A36ACDBEB395C768E0D022CF0326B936235849653B944A8C9DC2136AA3`.
+- The extra filename identifies this local fix separately from the published v1.1.0 artifact. No remote release was changed by this follow-up fix.
