@@ -173,3 +173,11 @@
 - Verification: `pnpm lint`, `pnpm test` (28 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (24 passed), and `git diff --check` passed. NSIS packaging and publication are recorded below after completion.
 - Remaining acceptance: native Windows visual review, clean-profile install/uninstall and real Canvas/SJTU authentication were not performed. No fixture results are represented as live synchronization.
 - Release workflow follows https://v2.tauri.app/distribute/ and https://cli.github.com/manual/gh_release_create (existing annotated tag with `--verify-tag` and a notes file).
+
+### v1.1.0 packaging and publication result
+
+- Source/tag commit: `b30092d2ec2744b5d1f86839dc890ae3a32b5ddb`; annotated tag `v1.1.0`. Pushed `feat/ddl-overview` and the new tag; existing remote branches and releases were not overwritten.
+- `pnpm tauri build` passed; packaged executable product version is `1.1.0`.
+- NSIS artifact: `src-tauri/target/release/bundle/nsis/SJTU Schedule_1.1.0_x64-setup.exe`, 3,586,924 bytes; SHA-256 `497CBCF5DB71EDEF1AA18D01A3DEF496610A78314102731BA04EDD479D53C090`.
+- Published latest stable release: https://github.com/S1mpleWind/sjtu-calendar/releases/tag/v1.1.0. GitHub reports the asset uploaded, non-draft/non-prerelease; the asset digest matches the local SHA-256 and the remote tag resolves to the source commit above.
+- Native installation and live external authentication remain unverified, as stated in the release notes.
