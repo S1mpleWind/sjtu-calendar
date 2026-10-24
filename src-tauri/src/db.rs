@@ -1,7 +1,7 @@
 use rusqlite::{Connection, OptionalExtension, params};
 use std::path::Path;
 
-pub const LATEST_SCHEMA: i64 = 7;
+pub const LATEST_SCHEMA: i64 = 8;
 
 const INITIAL_MIGRATION: &str = include_str!("../migrations/0001_initial.sql");
 const PERSONAL_EVENTS_MIGRATION: &str = include_str!("../migrations/0002_personal_events.sql");
@@ -11,6 +11,7 @@ const ICS_IMPORT_MIGRATION: &str = include_str!("../migrations/0005_ics_import.s
 const SJTU_OCCURRENCE_NOTES_MIGRATION: &str =
     include_str!("../migrations/0006_sjtu_occurrence_notes.sql");
 const DDL_OVERVIEW_MIGRATION: &str = include_str!("../migrations/0007_ddl_overview.sql");
+const LONG_TERM_MIGRATION: &str = include_str!("../migrations/0008_long_term_items.sql");
 
 pub fn initialize_database(path: &Path) -> rusqlite::Result<i64> {
     let mut connection = Connection::open(path)?;
@@ -35,6 +36,7 @@ pub(super) fn apply_migrations(connection: &mut Connection) -> rusqlite::Result<
         (5, ICS_IMPORT_MIGRATION),
         (6, SJTU_OCCURRENCE_NOTES_MIGRATION),
         (7, DDL_OVERVIEW_MIGRATION),
+        (8, LONG_TERM_MIGRATION),
     ] {
         let applied = connection
             .query_row(
@@ -69,14 +71,17 @@ mod tests {
     use rusqlite::Connection;
 
     #[test]
-    fn migrations_upgrade_to_v7_once_and_preserve_default_timezone() {
+    fn migrations_upgrade_to_latest_once_and_preserve_default_timezone() {
         let mut connection = Connection::open_in_memory().expect("open in-memory database");
 
         assert_eq!(
             apply_migrations(&mut connection).expect("apply initial migration"),
-            7
+            LATEST_SCHEMA
         );
-        assert_eq!(apply_migrations(&mut connection).expect("apply again"), 7);
+        assert_eq!(
+            apply_migrations(&mut connection).expect("apply again"),
+            LATEST_SCHEMA
+        );
 
         let timezone: String = connection
             .query_row(
@@ -99,7 +104,7 @@ mod tests {
                 row.get(0)
             })
             .expect("count migrations");
-        assert_eq!(migration_count, 7);
+        assert_eq!(migration_count, LATEST_SCHEMA);
         connection
             .query_row("SELECT COUNT(*) FROM recurrence_exceptions", [], |row| {
                 row.get::<_, i64>(0)

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { overviewDayState, type OverviewItem } from "./lib/ddl-overview";
 import "./ddl-overview.css";
+import LongTermChecklist from "./LongTermChecklist";
 
 const labels = { empty: "没有 DDL", pending: "有未完成 DDL", complete: "DDL 全部完成" };
 
@@ -29,11 +30,12 @@ export default function DdlOverview({ days, selectedDate, today, timezone, items
         })}
       </div>
     </div>
-    <aside className="overview-details" aria-label="当天 DDL 清单"><header><p className="eyebrow">每日清单</p><h3>{dateLabel}</h3><p>{labels[overviewDayState(selectedItems)]}</p></header>
+    <div className="overview-side"><aside className="overview-details" aria-label="当天 DDL 清单"><header><p className="eyebrow">每日清单</p><h3>{dateLabel}</h3><p>{labels[overviewDayState(selectedItems)]}</p></header>
       {selectedItems.length ? <ul>{selectedItems.map((item) => <li key={item.key} className={item.completed ? "done" : ""}>
         <input type="checkbox" aria-label={`完成 ${item.title}`} checked={item.completed} disabled={working || item.remoteCompleted} onChange={(event) => void onToggle(item, event.target.checked)} />
         <div><button className="overview-item-title" type="button" onClick={() => onOpen(item)}>{item.title}</button><p><span className={`overview-source ${item.source}`}>{item.source === "canvas" ? "Canvas" : "个人"}</span>{item.subtitle}</p><small>{item.remoteCompleted ? "Canvas 已提交 / 已评分" : new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(item.dueAt))}</small></div>
       </li>)}</ul> : <div className="overview-empty"><span>○</span><p>这天没有 DDL</p><small>在日程编辑器中勾选「纳入 DDL 总览」，就会显示在这里。</small></div>}
     </aside>
+    <LongTermChecklist /></div>
   </section>;
 }

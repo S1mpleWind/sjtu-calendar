@@ -2,6 +2,7 @@ mod backup;
 mod canvas;
 mod db;
 mod events;
+mod long_term;
 mod sjtu;
 mod widget;
 
@@ -27,6 +28,35 @@ struct WidgetStatus {
     canvas_last_success_at: Option<String>,
     sjtu_last_success_at: Option<String>,
     always_on_top: bool,
+}
+
+#[tauri::command]
+fn list_long_term_items(
+    state: State<'_, AppState>,
+) -> Result<Vec<long_term::LongTermItem>, String> {
+    long_term::list(&state.database_path)
+}
+
+#[tauri::command]
+fn create_long_term_item(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    title: String,
+) -> Result<(), String> {
+    changed(&app, long_term::create(&state.database_path, &title))
+}
+
+#[tauri::command]
+fn set_long_term_item_archived(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    archived: bool,
+) -> Result<(), String> {
+    changed(
+        &app,
+        long_term::set_archived(&state.database_path, &id, archived),
+    )
 }
 
 #[tauri::command]
@@ -392,6 +422,9 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             get_backend_status,
+            list_long_term_items,
+            create_long_term_item,
+            set_long_term_item_archived,
             export_data_backup,
             restore_data_backup,
             create_personal_event,

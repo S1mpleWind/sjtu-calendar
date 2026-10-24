@@ -15,6 +15,7 @@ describe("calendar window", () => {
     invoke.mockImplementation((command: string) => {
       if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 6 });
       if (command === "get_canvas_deadlines") return Promise.resolve([]);
+      if (command === "list_long_term_items") return Promise.resolve([]);
       if (command === "get_canvas_connection_status") return Promise.resolve({ configured: false, instanceUrl: null });
       if (command === "get_sjtu_course_occurrences") return Promise.resolve([]);
       if (command === "get_sjtu_connection_status") return Promise.resolve({ undergraduateConfigured: false, graduateConfigured: false });

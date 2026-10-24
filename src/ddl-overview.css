@@ -2,6 +2,21 @@
 .overview-date-nav > button:first-child, .overview-date-nav > button:nth-child(3) { width: auto; padding: 0 9px; font-size: 11px; white-space: nowrap; }
 .overview-month, .overview-details { border: 1px solid #e6eae4; border-radius: 14px; background: #fff; }
 .overview-month { padding: 24px 28px; }
+.overview-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.overview-side > .overview-details { min-width: 0; }
+.overview-side > .overview-details > ul { max-height: 320px; overflow-y: auto; }
+.long-term-header { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.long-term-header h3 { font-size: 13px; }
+.long-term-archive { flex-shrink: 0; border: 1px solid #dce5dd; border-radius: 7px; padding: 5px 7px; color: #34785c; background: #f7faf7; cursor: pointer; font-size: 10px; }
+.long-term-add { display: flex; gap: 6px; margin-top: 12px; }
+.long-term-add input { min-width: 0; flex: 1; width: 100%; border: 1px solid #dce5dd; border-radius: 7px; padding: 8px; color: #394e40; background: #fff; font: inherit; font-size: 11px; }
+.long-term-add button { border: 0; border-radius: 7px; padding: 6px 9px; background: #34785c; color: #fff; font-size: 11px; cursor: pointer; }
+.long-term-checklist button:disabled, .long-term-checklist input:disabled { opacity: .55; cursor: default; }
+.long-term-checklist .overview-item-title { cursor: default; }
+.long-term-archive-date { display: block; margin-top: 7px; }
+.long-term-empty, .long-term-hint { color: #87958b; font-size: 11px; line-height: 1.8; margin: 18px 0 0; }
+.long-term-error { color: #b34e4c; font-size: 11px; overflow-wrap: anywhere; margin-top: 12px; }
+.long-term-error button { margin-left: 8px; color: inherit; border: 0; background: none; cursor: pointer; }
 .overview-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .overview-summary h2 { margin: 5px 0 8px; color: #293d31; font-size: 21px; }
 .overview-summary p:not(.eyebrow), .overview-details header > p:last-child { margin: 0; color: #87958b; font-size: 11px; }
