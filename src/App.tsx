@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import {
   createPersonalEvent, deletePersonalEvent, getBackendStatus, getCalendarOccurrences, getCanvasConnectionStatus, getCanvasDeadlines, setCanvasAssignmentCompleted, saveCanvasCredentials, clearCanvasCredentials, testCanvasConnection, syncCanvas,
   getSjtuConnectionStatus, getSjtuCourseOccurrences, setSjtuOccurrenceNote, startSjtuLogin, finishSjtuLogin, clearSjtuLogin, syncSjtu,
-  previewIcsImport, applyIcsImport, type IcsPreview,
   exportDataBackup, restoreDataBackup,
   getPersonalEvent, listPersonalEvents, setPersonalEventCompleted, setRecurrenceException, updatePersonalEvent,
   type BackendStatus, type CalendarOccurrence, type EventDraft, type PersonalEvent, type CanvasConnectionStatus, type CanvasDeadline, type SjtuConnectionStatus, type SjtuCourseOccurrence,
@@ -417,7 +416,7 @@ function App() {
         </> : <div className="topbar-spacer" />}
       </header>
 
-      {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><IcsImportSettings onImported={refresh} /><BackupSettings onRestored={refresh} /></> : <>
+      {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><BackupSettings onRestored={refresh} /></> : <>
         <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>{view === "overview" ? "点击日期查看清单 · 本地日程勾选纳入总览 · 每次重复独立完成" : "单击周视图空白时段快捷新建 · Ctrl+N 新建 · Ctrl+←/→ 切换日期 · Ctrl+1/2 周/月视图"}</p></div><button className="refresh-button" aria-label="刷新 Canvas 作业" title={canvasStatus.configured ? "从 Canvas 获取最新作业" : "连接 Canvas 后可刷新作业"} onClick={() => void refreshCanvasAssignments()} disabled={busy} type="button"><span aria-hidden="true">↻</span>刷新 Canvas 作业</button></section>
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => void refresh()} type="button">重试</button></div>}
         {view === "overview" ? <DdlOverview days={days} selectedDate={selectedDate} today={today} timezone={timezone} items={overviewItems} working={overviewWorking || busy} onSelectDate={setSelectedDate} onToggle={completeOverviewItem} onOpen={openOverviewItem} /> : view === "week" ? <WeekView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} timezone={timezone} onOpenCourse={setSelectedCourse} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} /> : <MonthView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} selectedMonth={selectedMonth} onSelectDate={setSelectedDate} onOpenCourse={setSelectedCourse} onOpen={openItem} onNew={openNew} />}
@@ -488,32 +487,6 @@ function SjtuSettings({ status, notice, onStart, onFinish, onDisconnect, onSync 
     <p className="settings-help">{suggestion ? `已根据上海交大教务处公告预填第 1 周周一和 ${suggestion.weekCount} 周；如你的校区或培养方案不同，可在同步前修改。` : "该学期暂无已核实的校历日期；请选择教务处公布的第 1 周周一。"} 课程时间按交大节次表映射。</p>
     <button className="save-button" disabled={working || !configured || !startDate || !year.trim()} onClick={() => void run(() => onSync(source, year, term, startDate, weekCount))} type="button">刷新课表</button>
     {problem && <div className="error-banner" role="alert">{problem}</div>}{notice && <p className="settings-feedback" role="status">{notice}</p>}
-  </section>;
-}
-
-function IcsImportSettings({ onImported }: { onImported: () => Promise<void> }) {
-  const [fileName, setFileName] = useState("");
-  const [content, setContent] = useState("");
-  const [firstMonday, setFirstMonday] = useState("");
-  const [weekCount, setWeekCount] = useState(16);
-  const [preview, setPreview] = useState<IcsPreview | null>(null);
-  const [replaceSource, setReplaceSource] = useState(true);
-  const [working, setWorking] = useState(false);
-  const [message, setMessage] = useState("");
-  const [problem, setProblem] = useState("");
-  async function run(action: () => Promise<void>) {
-    setWorking(true); setProblem(""); setMessage("");
-    try { await action(); } catch (reason) { setProblem(reason instanceof Error ? reason.message : "ICS 导入失败"); }
-    finally { setWorking(false); }
-  }
-  return <section className="settings-panel ics-settings"><div className="settings-title"><div className="settings-icon">ICS</div><div><h2>课表文件导入</h2><p>将课程 ICS 导入为本地个人日程；不会显示为教务同步成功。</p></div></div>
-    <label className="form-field"><span>ICS 文件</span><input type="file" accept=".ics,text/calendar" onChange={(event) => { const file = event.target.files?.[0]; setPreview(null); setMessage(""); if (!file) { setFileName(""); setContent(""); return; } setFileName(file.name); void file.text().then(setContent).catch(() => setProblem("无法读取所选文件")); }} /></label>
-    <div className="form-two sjtu-term-fields"><label className="form-field"><span>映射到学期首周周一</span><input type="date" value={firstMonday} onChange={(event) => { setFirstMonday(event.target.value); setPreview(null); }} /></label><label className="form-field"><span>教学周数（1–24）</span><input type="number" min={1} max={24} value={weekCount} onChange={(event) => { setWeekCount(Number(event.target.value)); setPreview(null); }} /></label></div>
-    <p className="settings-help">支持常规单次和每周重复 VEVENT；每周重复按学期范围展开。请核对预览中的课程和时间，再应用导入。当前不支持的复杂重复规则会明确报错。</p>
-    <label className="check-field"><input type="checkbox" checked={replaceSource} onChange={(event) => setReplaceSource(event.target.checked)} />替换同名来源之前导入的日程</label>
-    <div className="settings-actions"><button className="cancel-button" disabled={working || !content || !firstMonday} onClick={() => void run(async () => setPreview(await previewIcsImport(content, fileName, firstMonday, weekCount)))} type="button">预览导入</button><button className="save-button" disabled={working || !preview} onClick={() => void run(async () => { const count = await applyIcsImport(content, fileName, firstMonday, weekCount, replaceSource); setMessage(`已导入 ${count} 个本地日程（ICS 文件：${fileName}）`); setPreview(null); await onImported(); })} type="button">应用导入</button></div>
-    {preview && <div className="ics-preview" role="status"><strong>{preview.sourceName} · {preview.eventCount} 个日程</strong>{preview.preview.map((item, index) => <p key={`${item.startLocal}-${index}`}>{item.startLocal.replace("T", " ")} · {item.title}{item.location ? ` · ${item.location}` : ""}</p>)}{preview.eventCount > preview.preview.length && <small>仅显示前 {preview.preview.length} 项预览；应用时包含全部 {preview.eventCount} 项。</small>}</div>}
-    {problem && <div className="error-banner" role="alert">{problem}</div>}{message && <p className="settings-feedback" role="status">{message}</p>}
   </section>;
 }
 

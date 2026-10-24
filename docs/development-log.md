@@ -164,3 +164,12 @@
 - Verification: `pnpm lint`, `pnpm test` (29 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (27 passed), and `git diff --check` passed. Tests cover mixed-source color states, opt-in persistence, completion/uncompletion after UI reload, month navigation, timezone boundaries, v6 upgrades, repeated-instance independence, cancelled/invalid requests, and backup restoration.
 - Visual acceptance remains outstanding: computer-use initialization succeeded but the native pipe was unavailable; browser inventory was empty. The temporary local preview server was stopped. No real account authentication or fabricated runtime sync success was used.
 - Windows packaging: `pnpm tauri build` passed. Local NSIS installer: `src-tauri/target/release/bundle/nsis/SJTU.Schedule_1.0.0_ddl-overview_15c065f_x64-setup.exe`, 3,600,019 bytes; SHA-256 `915ED10BF1B78AAC6A24C98CE75EB6560FB9551C848B9B70A31AFADEEFF3CF77`.
+
+## Remove ICS and prepare v1.1.0 — 2026-10-24
+
+- Branch: `feat/ddl-overview`. User requested removal of ICS and publication of a new release.
+- Removed the settings section, styles, frontend API, Tauri commands, Rust parser and obsolete import tests. Retained historical schema v5 and imported personal events for safe upgrades and backup compatibility; no user data or credentials were accessed.
+- Aligned frontend/Tauri/Cargo versions to 1.1.0 and updated current user and architecture documentation. This release also includes the previously committed DDL overview and calendar consistency fixes.
+- Verification: `pnpm lint`, `pnpm test` (28 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (24 passed), and `git diff --check` passed. NSIS packaging and publication are recorded below after completion.
+- Remaining acceptance: native Windows visual review, clean-profile install/uninstall and real Canvas/SJTU authentication were not performed. No fixture results are represented as live synchronization.
+- Release workflow follows https://v2.tauri.app/distribute/ and https://cli.github.com/manual/gh_release_create (existing annotated tag with `--verify-tag` and a notes file).

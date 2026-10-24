@@ -106,3 +106,10 @@
 - UI tests cover the sidebar entry, opt-in checkbox, monthly queries, gray empty days, red mixed-source days, yellow all-complete days, unchecking back to red, and reloading completion from backend state.
 - Rust tests cover migration v6→v7 with existing data, one-time inclusion of old local deadlines, independent recurrence completion, moves/cancellations, invalid completion requests, and backup/restore of overview state.
 - Native visual review is not claimed: Windows computer-use could not connect to its native pipe; browser inventory was empty. No account credentials or fabricated runtime sync records were used.
+
+## v1.1.0 — ICS removal
+
+- ICS settings, frontend API, Tauri commands and parser are removed. Historical Phase 4 checks above describe the earlier implementation.
+- Existing import metadata/migration and stored personal events remain compatible with upgrades and backup restore.
+- `pnpm lint`, `pnpm test` (28 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (24 passed) and `git diff --check` passed. Settings regression coverage confirms that the import controls are absent while SJTU sign-in remains available.
+- Packaged install/uninstall, native visual review and live account synchronization have not been revalidated in this change.

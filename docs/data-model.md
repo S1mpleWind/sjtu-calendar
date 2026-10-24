@@ -24,9 +24,9 @@ The account selection additionally stores `canvas.active_user_id` (a verified re
 
 Schema v6 adds `course_occurrence_notes`, keyed by meeting and teaching week. A note belongs to one dated class occurrence and survives schedule refreshes; clearing the note deletes only that occurrence's row.
 
-## Phase 4 fallback: ICS imports (schema v5)
+## Legacy import metadata (schema v5)
 
-`personal_events.import_source` and `import_key` mark events created by an ICS import. A partial unique index prevents duplicate active occurrences for a source. Replacing a source soft-deletes its prior occurrences and inserts the previewed set in one transaction; imported records remain local personal events and do not populate `sjtu_sync_state`. The original ICS content is not persisted. Database backup exports a checkpointed SQLite image in a versioned JSON envelope; restore validates SHA-256 and SQLite integrity before migration and file replacement. Credential Manager entries are outside the database.
+`personal_events.import_source` and `import_key` retain legacy import provenance and its partial unique index. ICS import was removed in v1.1.0; these columns and migration v5 remain so existing databases, imported personal events and backups continue to work. Database backup exports a checkpointed SQLite image in a versioned JSON envelope; restore validates SHA-256 and SQLite integrity before migration and file replacement. Credential Manager entries are outside the database.
 
 ## DDL overview (schema v7)
 

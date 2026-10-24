@@ -129,28 +129,8 @@ describe("calendar window", () => {
     await user.click(screen.getByRole("button", { name: "打开交大登录窗口" }));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("start_sjtu_login", { sourceSystem: "undergraduate" }));
     expect(screen.queryByLabelText(/密码|Cookie|Token/)).not.toBeInTheDocument();
-  });
-
-  it("previews an ICS course file with an explicit term mapping", async () => {
-    const user = userEvent.setup();
-    invoke.mockImplementation((command: string) => {
-      if (command === "get_backend_status") return Promise.resolve({ database: "sqlite", schemaVersion: 6 });
-      if (command === "get_canvas_deadlines") return Promise.resolve([]);
-      if (command === "get_canvas_connection_status") return Promise.resolve({ configured: false, instanceUrl: null });
-      if (command === "get_sjtu_course_occurrences") return Promise.resolve([]);
-      if (command === "get_sjtu_connection_status") return Promise.resolve({ undergraduateConfigured: false, graduateConfigured: false });
-      if (command === "get_calendar_occurrences" || command === "list_personal_events") return Promise.resolve([]);
-      if (command === "preview_ics_import") return Promise.resolve({ sourceName: "courses.ics", eventCount: 2, preview: [{ title: "高等数学", startLocal: "2026-09-07T08:00:00", endLocal: "2026-09-07T08:45:00", location: "A101" }] });
-      return Promise.resolve(null);
-    });
-    render(<App />);
-    await user.click(screen.getByRole("button", { name: "⚙设置" }));
-    const file = new File(["BEGIN:VCALENDAR\nEND:VCALENDAR"], "courses.ics", { type: "text/calendar" });
-    await user.upload(screen.getByLabelText("ICS 文件"), file);
-    await user.type(screen.getByLabelText("映射到学期首周周一"), "2026-09-07");
-    await user.click(screen.getByRole("button", { name: "预览导入" }));
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith("preview_ics_import", expect.objectContaining({ sourceName: "courses.ics", firstMonday: "2026-09-07", weekCount: 16 })));
-    expect(await screen.findByText("courses.ics · 2 个日程")).toBeInTheDocument();
+    expect(screen.queryByText("课表文件导入")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("ICS 文件")).not.toBeInTheDocument();
   });
 
   it("restores a selected backup only after explicit user confirmation", async () => {

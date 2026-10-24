@@ -2,7 +2,6 @@ mod backup;
 mod canvas;
 mod db;
 mod events;
-mod ics;
 mod sjtu;
 mod widget;
 
@@ -177,39 +176,6 @@ fn get_calendar_occurrences(
         &from_date,
         &to_date,
         &display_timezone,
-    )
-}
-
-#[tauri::command]
-fn preview_ics_import(
-    content: String,
-    source_name: String,
-    first_monday: String,
-    week_count: u8,
-) -> Result<ics::IcsPreview, String> {
-    ics::preview(&content, &source_name, &first_monday, week_count)
-}
-
-#[tauri::command]
-fn apply_ics_import(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-    content: String,
-    source_name: String,
-    first_monday: String,
-    week_count: u8,
-    replace_source: bool,
-) -> Result<usize, String> {
-    changed(
-        &app,
-        ics::apply(
-            &state.database_path,
-            &content,
-            &source_name,
-            &first_monday,
-            week_count,
-            replace_source,
-        ),
     )
 }
 
@@ -398,8 +364,6 @@ pub fn run() {
             set_recurrence_exception,
             set_personal_event_completed,
             get_calendar_occurrences,
-            preview_ics_import,
-            apply_ics_import,
             save_canvas_credentials,
             clear_canvas_credentials,
             get_canvas_connection_status,

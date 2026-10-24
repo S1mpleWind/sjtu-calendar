@@ -21,11 +21,11 @@ The main window now renders local query results in week/month layouts and suppor
 
 `src-tauri/src/canvas.rs` owns the Canvas HTTP client, token access through Windows Credential Manager, paginated API reads, SQLite cache updates and local completion flags. Canvas credentials and cache never enter browser storage. Startup calendar queries read the last synchronized user cache without network access. Partial course failures preserve existing cache rows; a fully successful sync archives rows no longer returned. See `docs/integration-canvas.md` for endpoint and security details.
 
-## Phase 4 update — SJTU and ICS
+## Phase 4 update — SJTU
 
 `src-tauri/src/sjtu.rs` separates undergraduate and graduate HTTP adapters from their row parsers. Each maps into explicit course and meeting values, then applies one SQLite transaction; complete syncs archive stale meetings, while partial parses and request errors preserve the last cache. The authenticated WebView is isolated from the main window, and its cookies are read only in the Rust backend, saved in Windows Credential Manager, and removed from the temporary WebView when the login window closes. The saved-session flag is not an authentication claim; only a real schedule request can validate it. Source audit and the user's live verification steps are in `docs/integration-sjtu.md`.
 
-When live account verification is unavailable, `src-tauri/src/ics.rs` provides a deliberately labeled import path. It previews and maps common single and weekly VEVENTs to a selected academic term, then stores their expanded instances as local personal events. Migration v5 tracks source filename and event identity for idempotency and replacement. It never records an imported file as an SJTU sync result.
+The former ICS import UI, commands and parser were removed in v1.1.0 at the user's request. Migration v5 remains for upgrade and backup compatibility; previously imported personal events are preserved.
 
 SJTU term suggestions are bundled only for terms whose first teaching Monday was verified from official SJTU notices; users can correct the date before sync. One-off class notes are stored by meeting and teaching week (schema v6), so they do not spill into other repetitions.
 

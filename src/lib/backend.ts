@@ -23,12 +23,6 @@ export interface SjtuCourseOccurrence {
   meetingId: string; note: string;
 }
 
-export interface IcsPreview {
-  sourceName: string;
-  eventCount: number;
-  preview: Array<{ title: string; startLocal: string; endLocal: string; location: string }>;
-}
-
 export interface EventDraft {
   title: string;
   description: string;
@@ -161,7 +155,3 @@ export const getSjtuCourseOccurrences = (fromDate: string, toDate: string, displ
   invoke<SjtuCourseOccurrence[]>("get_sjtu_course_occurrences", { fromDate, toDate, displayTimezone });
 export const setSjtuOccurrenceNote = (meetingId: string, weekNumber: number, note: string) =>
   invoke<void>("set_sjtu_occurrence_note", { meetingId, weekNumber, note });
-export const previewIcsImport = (content: string, sourceName: string, firstMonday: string, weekCount: number) =>
-  invoke<IcsPreview>("preview_ics_import", { content, sourceName, firstMonday, weekCount });
-export const applyIcsImport = (content: string, sourceName: string, firstMonday: string, weekCount: number, replaceSource: boolean) =>
-  invoke<number>("apply_ics_import", { content, sourceName, firstMonday, weekCount, replaceSource });
