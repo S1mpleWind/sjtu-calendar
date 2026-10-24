@@ -107,3 +107,77 @@
 - Date: 2026-10-21 (Asia/Singapore).
 - Change: clicking an empty time slot in the weekly calendar now opens the existing event editor with the clicked date/time (rounded to a 15-minute boundary) and a one-hour duration. Event cards keep their existing click-to-open behavior; month view retains its date-selection behavior.
 - Verification: added a UI test for the start and end time prefill. `pnpm lint`, `pnpm test` (13 passed), and `pnpm build` passed.
+
+## Desktop Widget — `feat/desktop-widget`
+
+- Date: 2026-10-21 (Asia/Singapore).
+- Implementation: added a separate frameless, resizable Widget window backed by the existing SQLite calendar/SJTU/Canvas cache; one-click detail routing to the main window; optional persisted always-on-top; window bounds persistence; and a tray menu. Closing either window hides it to the tray. No account credentials or fabricated sync results are used.
+- Verification: `pnpm lint`, `pnpm test` (16 passed), `pnpm build`, `cargo fmt --check`, and `cargo test` (21 passed). The final Windows `pnpm tauri build` completed and produced `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3,578,909 bytes; SHA-256 `F034F3D8B745CD26648C16BB1FD66C1973A26C5481E1B3DE4F6AB6A5A5DEEF58`).
+- Manual acceptance remains outstanding: native tray behavior, frameless drag/resize, restore bounds after restart, always-on-top, packaged launch, and multi-display behavior. Do not describe the Widget as release-ready until those checks pass.
+- Git commit: `98b41e9cf1566667de4eaff2cb62d4cd9f5fee50`.
+
+## Widget compact glass and tray-first startup
+
+- Date: 2026-10-21 (Asia/Singapore).
+- Change: reduced default Widget size from 360×480 to 320×420, added translucent rounded styling and Tauri transparency/Mica support, and launch with the main window hidden and the Widget shown. The visible “主程序” control wakes the main window. Window-state persistence is restricted to position and size so startup visibility remains tray-first.
+- Verification: `pnpm lint`, `pnpm test` (17 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (21 passed), and `pnpm tauri build` passed. NSIS output: `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3,578,210 bytes; SHA-256 `C78DE94ED1E03136F89AF03B48CA94213D51B485BB5B0CA5C4973611B40FC130`).
+- Manual visual review of transparency/Mica and startup/tray wake behavior remains required on Windows.
+- Git commit: `4c3b9376b4c4c3f56b70e3e35461e429ef014436`.
+
+## Widget visible acrylic transparency adjustment
+
+- Date: 2026-10-21 (Asia/Singapore).
+- Change: switched the transparent Widget window effect from Windows 11 Mica to Acrylic and lowered the shell/content surface opacity so the desktop behind the Widget is visibly present. Acrylic can reduce drag/resize performance on some Windows builds; see the official Tauri configuration documentation.
+- Installer check: the generated NSIS script includes `MUI_PAGE_DIRECTORY`, so the current interactive setup lets users choose the install directory.
+- Verification: `pnpm lint`, `pnpm test` (17 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (21 passed), and `pnpm tauri build`. NSIS output: `src-tauri/target/release/bundle/nsis/SJTU Schedule_0.1.0_x64-setup.exe` (3,579,553 bytes; SHA-256 `290249D9B6989925AC20AC933919004D9592734A58567BC6BC5D40544F2B9612`). Native visual confirmation remains to be checked on the user's Windows desktop.
+
+## Publish non-Widget v0.1.0 release
+
+- Date: 2026-10-21 (Asia/Singapore).
+- Source: existing `v0.1.0` tag at `5e8701b`; its Tauri config has only the main window, so the release does not include the Widget.
+- Artifact: `SJTU.Schedule_0.1.0_x64-setup.exe`, 3,502,842 bytes; SHA-256 `6E151BD9ABB5F57E5D970C8A817C0701235981E64A88B7D6755DCEF42E063518`.
+- Result: published and verified at https://github.com/S1mpleWind/sjtu-calendar/releases/tag/v0.1.0.
+
+## Prepare v1.0.0 Widget release
+
+- Date: 2026-10-21 (Asia/Singapore).
+- Source commit: `eae214a9546de848a16bce17320bb9fd6cc11a61` (`chore(release): prepare v1.0.0`); aligned the Tauri, Cargo, and frontend versions and updated the README to describe the included Widget.
+- Verification: `pnpm lint`, `pnpm test` (17 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (21 passed), and `pnpm tauri build`. The packaged executable reports file/product version `1.0.0`.
+- Artifact: `src-tauri/target/release/bundle/nsis/SJTU Schedule_1.0.0_x64-setup.exe`, 3,579,677 bytes; SHA-256 `4292AC2ABD9698C9E7F888890F269048813FFD57408658BBEE9B9028801C7510`.
+- Result: published and verified at https://github.com/S1mpleWind/sjtu-calendar/releases/tag/v1.0.0; the uploaded asset digest matches the local SHA-256.
+- Not manually verified: native Widget transparency/performance, tray startup/wake behavior, install/uninstall on a clean Windows profile, and live SJTU/Canvas authentication.
+## Calendar consistency fixes — 2026-10-23
+
+- Branch: `feat/desktop-widget`; implementation commit `c66206906821e5035e280ad776825ad0a8434c19`.
+- Fixed: explicit recurrence edit scope preserves the original series anchor and full RRULE; moved single occurrences are found in their destination range without duplicate IDs. Title-only exceptions retain their dated occurrence, including a move back to the series start.
+- Fixed: Canvas cache reads/completion flags use an explicitly verified account; credential changes rotate a non-secret revision and reject stale sync results. Upgrade from an unbound cache and backup restore require one Test Connection/Sync to rebind the current account; existing cached rows are retained.
+- Fixed: successful backend mutations broadcast cache-change notifications to both windows; Widget follows timezone changes and discards out-of-order reads. Overnight/multi-day events appear on each overlapping date with exclusive midnight boundaries and clipped week-view segments.
+- Verification: `pnpm lint`, `pnpm test` (25 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (23 passed), `pnpm tauri build`, and `git diff --check` passed. Regression tests cover the defects reproduced in the review, account replacement/stale responses, restore identity reset, timezone/DST boundaries, notification cleanup, and race ordering.
+- Local NSIS package: `src-tauri/target/release/bundle/nsis/SJTU.Schedule_1.0.0_c662069_x64-setup.exe`, 3,592,002 bytes; SHA-256 `83819164F60D59DCEC67587F4C4C356CBEB966E3EB0A529CDA4C23F0BCC2EFD8`.
+- Not verified manually: native packaged window notification delivery/rendering and real SJTU/Canvas authentication. No credentials were read for this check; API tests use fixtures. This task creates local commits and an installer; no remote release was changed.
+## Monthly DDL overview — 2026-10-24
+
+- Branch: `feat/ddl-overview`; implementation commit `15c065fd7f919c91168c1c40eed9079b4e45a0cc`.
+- UI: sidebar entry opens a month of date circles (red if any item is pending, yellow if all are complete, gray if empty). Selecting a date opens its checklist; the existing month navigation changes the requested month.
+- Data: combines cached Canvas assignments with opted-in local events. The editor offers an explicit opt-in; local events count on their start date in the selected display timezone. Remote submissions/grades and local Canvas marks count as completed. Local completion is stored per original occurrence and survives restarts, recurring moves, non-recurring edits, and backups.
+- Migration: schema v7 preserves prior rows and opts existing local deadline rows in once. Legacy recurrence overrides inherit the parent flag. New opt-in/completion fields contain no account credentials; backup format supports schema v7.
+- Verification: `pnpm lint`, `pnpm test` (29 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (27 passed), and `git diff --check` passed. Tests cover mixed-source color states, opt-in persistence, completion/uncompletion after UI reload, month navigation, timezone boundaries, v6 upgrades, repeated-instance independence, cancelled/invalid requests, and backup restoration.
+- Visual acceptance remains outstanding: computer-use initialization succeeded but the native pipe was unavailable; browser inventory was empty. The temporary local preview server was stopped. No real account authentication or fabricated runtime sync success was used.
+- Windows packaging: `pnpm tauri build` passed. Local NSIS installer: `src-tauri/target/release/bundle/nsis/SJTU.Schedule_1.0.0_ddl-overview_15c065f_x64-setup.exe`, 3,600,019 bytes; SHA-256 `915ED10BF1B78AAC6A24C98CE75EB6560FB9551C848B9B70A31AFADEEFF3CF77`.
+
+## Remove ICS and prepare v1.1.0 — 2026-10-24
+
+- Branch: `feat/ddl-overview`. User requested removal of ICS and publication of a new release.
+- Removed the settings section, styles, frontend API, Tauri commands, Rust parser and obsolete import tests. Retained historical schema v5 and imported personal events for safe upgrades and backup compatibility; no user data or credentials were accessed.
+- Aligned frontend/Tauri/Cargo versions to 1.1.0 and updated current user and architecture documentation. This release also includes the previously committed DDL overview and calendar consistency fixes.
+- Verification: `pnpm lint`, `pnpm test` (28 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (24 passed), and `git diff --check` passed. NSIS packaging and publication are recorded below after completion.
+- Remaining acceptance: native Windows visual review, clean-profile install/uninstall and real Canvas/SJTU authentication were not performed. No fixture results are represented as live synchronization.
+- Release workflow follows https://v2.tauri.app/distribute/ and https://cli.github.com/manual/gh_release_create (existing annotated tag with `--verify-tag` and a notes file).
+
+### v1.1.0 packaging and publication result
+
+- Source/tag commit: `b30092d2ec2744b5d1f86839dc890ae3a32b5ddb`; annotated tag `v1.1.0`. Pushed `feat/ddl-overview` and the new tag; existing remote branches and releases were not overwritten.
+- `pnpm tauri build` passed; packaged executable product version is `1.1.0`.
+- NSIS artifact: `src-tauri/target/release/bundle/nsis/SJTU Schedule_1.1.0_x64-setup.exe`, 3,586,924 bytes; SHA-256 `497CBCF5DB71EDEF1AA18D01A3DEF496610A78314102731BA04EDD479D53C090`.
+- Published latest stable release: https://github.com/S1mpleWind/sjtu-calendar/releases/tag/v1.1.0. GitHub reports the asset uploaded, non-draft/non-prerelease; the asset digest matches the local SHA-256 and the remote tag resolves to the source commit above.
+- Native installation and live external authentication remain unverified, as stated in the release notes.

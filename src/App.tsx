@@ -2,15 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import {
   createPersonalEvent, deletePersonalEvent, getBackendStatus, getCalendarOccurrences, getCanvasConnectionStatus, getCanvasDeadlines, setCanvasAssignmentCompleted, saveCanvasCredentials, clearCanvasCredentials, testCanvasConnection, syncCanvas,
   getSjtuConnectionStatus, getSjtuCourseOccurrences, setSjtuOccurrenceNote, startSjtuLogin, finishSjtuLogin, clearSjtuLogin, syncSjtu,
-  previewIcsImport, applyIcsImport, type IcsPreview,
   exportDataBackup, restoreDataBackup,
-  getPersonalEvent, listPersonalEvents, setRecurrenceException, updatePersonalEvent,
+  getPersonalEvent, listPersonalEvents, setPersonalEventCompleted, setRecurrenceException, updatePersonalEvent,
   type BackendStatus, type CalendarOccurrence, type EventDraft, type PersonalEvent, type CanvasConnectionStatus, type CanvasDeadline, type SjtuConnectionStatus, type SjtuCourseOccurrence,
   type RecurrenceOverride,
 } from "./lib/backend";
+import { emitTo, listen } from "@tauri-apps/api/event";
+import { toggleWidget } from "./lib/backend";
 import "./App.css";
+import { dayMinutes, groupByDay } from "./lib/calendar-days";
+import { useCalendarUpdates } from "./lib/calendar-updates";
+import DdlOverview from "./DdlOverview";
+import { buildOverviewItems, type OverviewItem } from "./lib/ddl-overview";
 
-type View = "week" | "month";
+type View = "week" | "month" | "overview";
 type EditorState = { event?: PersonalEvent; occurrence?: CalendarOccurrence; date: string; startTime?: string };
 const ZONES = ["Asia/Shanghai", "Asia/Tokyo", "America/New_York", "Europe/London", "UTC"];
 const FIRST_HOUR = 7;
@@ -56,10 +61,6 @@ function displayDate(key: string, options: Intl.DateTimeFormatOptions = { month:
   return new Intl.DateTimeFormat("zh-CN", { ...options, timeZone: "UTC" }).format(new Date(`${key}T12:00:00Z`));
 }
 function weekday(key: string) { return new Intl.DateTimeFormat("zh-CN", { weekday: "short", timeZone: "UTC" }).format(new Date(`${key}T12:00:00Z`)); }
-function clock(utc: string, timezone: string) {
-  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(utc));
-  return { hour: Number(parts.find((part) => part.type === "hour")?.value), minute: Number(parts.find((part) => part.type === "minute")?.value) };
-}
 function timeLabel(item: CalendarOccurrence, timezone: string) {
   if (item.allDay) return "全天";
   const format: Intl.DateTimeFormatOptions = { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
@@ -88,13 +89,7 @@ function emptyDraft(date: string, timezone: string, startTime = localNow(timezon
   const endTotal = hour * 60 + minute + 60;
   const endDate = endTotal >= 24 * 60 ? addDays(date, 1) : date;
   const end = `${String(Math.floor(endTotal % (24 * 60) / 60)).padStart(2, "0")}:${String(endTotal % 60).padStart(2, "0")}`;
-  return { title: "", description: "", location: "", category: "event", startLocal: `${date}T${startTime}:00`, endLocal: `${endDate}T${end}:00`, timezone, allDay: false, rrule: null, color: "#4f46e5" };
-}
-function repeatLabel(rule: string | null) {
-  if (!rule) return "不重复";
-  if (/FREQ=DAILY/.test(rule)) return "每天";
-  if (/INTERVAL=2/.test(rule)) return "每两周";
-  return "每周";
+  return { title: "", description: "", location: "", category: "event", startLocal: `${date}T${startTime}:00`, endLocal: `${endDate}T${end}:00`, timezone, allDay: false, rrule: null, color: "#4f46e5", includeInOverview: false };
 }
 function localDateTime(utc: string, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(new Date(utc));
@@ -138,37 +133,58 @@ function App() {
   const [occurrences, setOccurrences] = useState<CalendarOccurrence[]>([]);
   const [events, setEvents] = useState<PersonalEvent[]>([]);
   const [canvasDeadlines, setCanvasDeadlines] = useState<CanvasDeadline[]>([]);
-  const [canvasStatus, setCanvasStatus] = useState<CanvasConnectionStatus>({ configured: false, instanceUrl: null });
+  const [canvasStatus, setCanvasStatus] = useState<CanvasConnectionStatus>({ configured: false, instanceUrl: null, accountVerified: false });
   const [canvasNotice, setCanvasNotice] = useState("");
   const [sjtuOccurrences, setSjtuOccurrences] = useState<SjtuCourseOccurrence[]>([]);
   const [sjtuStatus, setSjtuStatus] = useState<SjtuConnectionStatus>({ undergraduateConfigured: false, graduateConfigured: false });
   const [sjtuNotice, setSjtuNotice] = useState("");
   const [selectedCourse, setSelectedCourse] = useState<SjtuCourseOccurrence | null>(null);
+  const [selectedCanvasDeadline, setSelectedCanvasDeadline] = useState<CanvasDeadline | null>(null);
   const [status, setStatus] = useState<BackendStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<"calendar" | "settings">("calendar");
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [overviewWorking, setOverviewWorking] = useState(false);
   const refreshSequence = useRef(0);
 
-  useEffect(() => { localStorage.setItem("calendar-timezone", timezone); }, [timezone]);
+  useEffect(() => {
+    localStorage.setItem("calendar-timezone", timezone);
+    void Promise.resolve(emitTo("widget", "calendar-timezone-changed", timezone)).catch(() => {});
+  }, [timezone]);
+  useEffect(() => {
+    let active = true;
+    const unlisten: Array<() => void> = [];
+    void listen<SjtuCourseOccurrence>("widget-open-course", ({ payload }) => {
+      const date = dateInZone(new Date(payload.startUtc), timezone);
+      setPage("calendar"); setView("week"); setSelectedDate(date); setMiniMonth(date); setSelectedCourse(payload);
+    }).then((stop) => { if (active) unlisten.push(stop); else stop(); });
+    void listen<CalendarOccurrence>("widget-open-event", async ({ payload }) => {
+      const date = dateInZone(new Date(payload.startUtc), timezone);
+      setPage("calendar"); setView("week"); setSelectedDate(date); setMiniMonth(date);
+      try {
+        const event = await getPersonalEvent(payload.eventId);
+        if (event && active) setEditor({ event, occurrence: payload, date });
+      } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : "无法读取日程详情"); }
+    }).then((stop) => { if (active) unlisten.push(stop); else stop(); });
+    void listen<CanvasDeadline>("widget-open-canvas-deadline", ({ payload }) => {
+      const date = dateInZone(new Date(payload.dueAt), timezone);
+      setPage("calendar"); setView("week"); setSelectedDate(date); setMiniMonth(date); setSelectedCanvasDeadline(payload);
+    }).then((stop) => { if (active) unlisten.push(stop); else stop(); });
+    return () => { active = false; unlisten.forEach((stop) => stop()); };
+  }, [timezone]);
   const range = useMemo(() => {
     if (view === "week") {
       const from = mondayOf(selectedDate);
       return { from, to: addDays(from, 6) };
     }
+    if (view === "overview") return { from: monthStart(selectedDate), to: monthEnd(selectedDate) };
     const from = gridStart(selectedDate);
     return { from, to: addDays(from, 41) };
   }, [selectedDate, view]);
-  const days = useMemo(() => Array.from({ length: view === "week" ? 7 : 42 }, (_, index) => addDays(range.from, index)), [range.from, view]);
-  const grouped = useMemo(() => {
-    const result = new Map<string, CalendarOccurrence[]>();
-    for (const item of occurrences) {
-      const date = dateInZone(new Date(item.startUtc), timezone);
-      result.set(date, [...(result.get(date) ?? []), item]);
-    }
-    return result;
-  }, [occurrences, timezone]);
+  const days = useMemo(() => Array.from({ length: Math.round((Date.parse(range.to + "T00:00:00Z") - Date.parse(range.from + "T00:00:00Z")) / 86400000) + 1 }, (_, index) => addDays(range.from, index)), [range.from, range.to]);
+  const overviewItems = useMemo(() => buildOverviewItems(occurrences, canvasDeadlines, timezone), [occurrences, canvasDeadlines, timezone]);
+  const grouped = useMemo(() => groupByDay(occurrences, days, timezone), [occurrences, days, timezone]);
   const canvasByDay = useMemo(() => {
     const result = new Map<string, CanvasDeadline[]>();
     for (const item of canvasDeadlines) {
@@ -207,6 +223,7 @@ function App() {
       if (sequence === refreshSequence.current) setError(reason instanceof Error ? reason.message : "读取本地日程失败，请检查应用数据库状态。");
     } finally { if (sequence === refreshSequence.current) setBusy(false); }
   }, [range.from, range.to, timezone]);
+  useCalendarUpdates(refresh);
   useEffect(() => {
     const timer = window.setTimeout(() => { void refresh(); }, 0);
     return () => window.clearTimeout(timer);
@@ -235,6 +252,7 @@ function App() {
           title: singleDraft.title, description: singleDraft.description, location: singleDraft.location,
           category: singleDraft.category, startLocal: singleDraft.startLocal, endLocal: singleDraft.endLocal,
           timezone: singleDraft.timezone, allDay: singleDraft.allDay, color: singleDraft.color,
+          includeInOverview: singleDraft.includeInOverview,
         };
         await setRecurrenceException(editor.event.id, editor.occurrence.originalStartLocal, "override", override);
       } else if (editor.event) await updatePersonalEvent(editor.event.id, draft);
@@ -264,14 +282,30 @@ function App() {
       setCanvasDeadlines((current) => current.map((entry) => entry.courseId === item.courseId && entry.assignmentId === item.assignmentId ? { ...entry, localCompleted: completed } : entry));
     } catch (reason) { setCanvasNotice(reason instanceof Error ? reason.message : "无法更新本地完成标记"); }
   }
+  async function completeOverviewItem(item: OverviewItem, completed: boolean) {
+    setOverviewWorking(true);
+    setError(null);
+    try {
+      if (item.source === "canvas") await setCanvasAssignmentCompleted(item.value.courseId, item.value.assignmentId, completed);
+      else await setPersonalEventCompleted(item.value.eventId, item.value.originalStartLocal, completed);
+      await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "无法更新 DDL 完成状态"); }
+    finally { setOverviewWorking(false); }
+  }
+  function openOverviewItem(item: OverviewItem) {
+    if (item.source === "canvas") setSelectedCanvasDeadline(item.value);
+    else void openItem(item.value);
+  }
   async function connectCanvas(instance: string, token: string) {
     await saveCanvasCredentials(instance, token);
     setCanvasStatus(await getCanvasConnectionStatus());
     setCanvasNotice("凭据已安全保存。请测试连接以验证 Canvas 账户。");
+    await refresh();
   }
   async function runCanvasTest() {
     const profile = await testCanvasConnection();
     setCanvasNotice(`已连接：${profile.name || profile.userId}（${profile.instanceUrl}）`);
+    await refresh();
   }
   async function runCanvasSync() {
     const result = await syncCanvas();
@@ -292,7 +326,7 @@ function App() {
   }
   async function disconnectCanvas() {
     await clearCanvasCredentials();
-    setCanvasStatus({ configured: false, instanceUrl: null });
+    setCanvasStatus({ configured: false, instanceUrl: null, accountVerified: false });
     setCanvasNotice("已从 Windows Credential Manager 移除 Canvas 凭据。");
     setCanvasDeadlines([]);
   }
@@ -351,7 +385,8 @@ function App() {
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">S</span><div><strong>SJTU Schedule</strong><small>个人日历</small></div></div>
       <nav className="side-nav" aria-label="主导航">
-        <button className={page === "calendar" ? "side-link active" : "side-link"} onClick={() => setPage("calendar")} type="button"><span>▦</span>日历</button>
+        <button className={page === "calendar" && view !== "overview" ? "side-link active" : "side-link"} onClick={() => { setPage("calendar"); if (view === "overview") setView("week"); }} type="button"><span>▦</span>日历</button>
+        <button className={page === "calendar" && view === "overview" ? "side-link active" : "side-link"} onClick={() => { setPage("calendar"); setView("overview"); }} type="button"><span aria-hidden="true">◉</span>DDL 总览</button>
         <button className={page === "settings" ? "side-link active" : "side-link"} onClick={() => setPage("settings")} type="button"><span>⚙</span>设置</button>
       </nav>
       <section className="mini-calendar" aria-label="迷你日历">
@@ -372,24 +407,26 @@ function App() {
 
     <section className="main-area">
       <header className="topbar">
-        <div className="heading"><p className="eyebrow">{page === "calendar" ? "你的安排，一目了然" : "本地偏好设置"}</p><h1>{page === "calendar" ? "日历" : "设置"}</h1></div>
+        <div className="heading"><p className="eyebrow">{page === "calendar" ? "你的安排，一目了然" : "本地偏好设置"}</p><h1>{page === "calendar" ? view === "overview" ? "DDL 总览" : "日历" : "设置"}</h1></div>
         {page === "calendar" ? <>
           <div className="date-nav"><button aria-label="上一个时间段" onClick={() => navigate(-1)} type="button">‹</button><button className="today-button" onClick={() => { setSelectedDate(today); setMiniMonth(today); }} type="button">今天</button><button aria-label="下一个时间段" onClick={() => navigate(1)} type="button">›</button><strong>{displayMonth(selectedDate, timezone)}</strong></div>
           <div className="view-switch" role="group" aria-label="日历视图"><button className={view === "week" ? "selected" : ""} onClick={() => setView("week")} type="button">周</button><button className={view === "month" ? "selected" : ""} onClick={() => setView("month")} type="button">月</button></div>
+          <button className="widget-open-button" onClick={() => void toggleWidget().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "无法打开 Widget"))} type="button">▣ Widget</button>
           <button className="new-button" onClick={() => openNew()} type="button"><span>＋</span>新建日程</button>
         </> : <div className="topbar-spacer" />}
       </header>
 
-      {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><IcsImportSettings onImported={refresh} /><BackupSettings onRestored={refresh} /></> : <>
-        <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>单击周视图空白时段快捷新建 · Ctrl+N 新建 · Ctrl+←/→ 切换日期 · Ctrl+1/2 周/月视图</p></div><button className="refresh-button" aria-label="刷新 Canvas 作业" title={canvasStatus.configured ? "从 Canvas 获取最新作业" : "连接 Canvas 后可刷新作业"} onClick={() => void refreshCanvasAssignments()} disabled={busy} type="button"><span aria-hidden="true">↻</span>刷新 Canvas 作业</button></section>
+      {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><BackupSettings onRestored={refresh} /></> : <>
+        <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>{view === "overview" ? "点击日期查看清单 · 本地日程勾选纳入总览 · 每次重复独立完成" : "单击周视图空白时段快捷新建 · Ctrl+N 新建 · Ctrl+←/→ 切换日期 · Ctrl+1/2 周/月视图"}</p></div><button className="refresh-button" aria-label="刷新 Canvas 作业" title={canvasStatus.configured ? "从 Canvas 获取最新作业" : "连接 Canvas 后可刷新作业"} onClick={() => void refreshCanvasAssignments()} disabled={busy} type="button"><span aria-hidden="true">↻</span>刷新 Canvas 作业</button></section>
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => void refresh()} type="button">重试</button></div>}
-        {view === "week" ? <WeekView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} timezone={timezone} onOpenCourse={setSelectedCourse} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} /> : <MonthView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} selectedMonth={selectedMonth} onSelectDate={setSelectedDate} onOpenCourse={setSelectedCourse} onOpen={openItem} onNew={openNew} />}
-        <CanvasDeadlineStrip days={days} deadlines={canvasByDay} timezone={timezone} onComplete={markCanvasDeadline} />
+        {view === "overview" ? <DdlOverview days={days} selectedDate={selectedDate} today={today} timezone={timezone} items={overviewItems} working={overviewWorking || busy} onSelectDate={setSelectedDate} onToggle={completeOverviewItem} onOpen={openOverviewItem} /> : view === "week" ? <WeekView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} timezone={timezone} onOpenCourse={setSelectedCourse} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} /> : <MonthView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} selectedMonth={selectedMonth} onSelectDate={setSelectedDate} onOpenCourse={setSelectedCourse} onOpen={openItem} onNew={openNew} />}
+        {view !== "overview" && <CanvasDeadlineStrip days={days} deadlines={canvasByDay} timezone={timezone} onComplete={markCanvasDeadline} />}
         <footer className="calendar-footer"><span><i className="online-dot" />数据保存在此设备</span><span>{busy ? "正在读取本地日程…" : `${occurrences.length} 个日程实例`}</span></footer>
       </>}
     </section>
     {editor && <EventEditor key={`${editor.event?.id ?? "new"}-${editor.occurrence?.occurrenceId ?? editor.date}`} editor={editor} timezone={timezone} busy={busy} onClose={() => setEditor(null)} onSave={saveItem} onDelete={removeItem} />}
     {selectedCourse && <CourseDetails course={selectedCourse} onSaveNote={saveCourseOccurrenceNote} onClose={() => setSelectedCourse(null)} />}
+    {selectedCanvasDeadline && <CanvasAssignmentDetails deadline={selectedCanvasDeadline} timezone={timezone} onClose={() => setSelectedCanvasDeadline(null)} />}
   </main>;
 }
 
@@ -414,6 +451,7 @@ function CanvasSettings({ canvasStatus, notice, onConnect, onTest, onSync, onDis
     <label className="form-field"><span>Canvas 实例</span><select value={instance} onChange={(event) => setInstance(event.target.value)}><option value="https://oc.sjtu.edu.cn">上海交通大学 Canvas</option><option value="https://jicanvas.com">交我算 Canvas</option></select></label>
     <label className="form-field"><span>个人访问令牌</span><input type="password" autoComplete="new-password" value={token} onChange={(event) => setToken(event.target.value)} placeholder={canvasStatus.configured ? "已保存；输入新令牌可替换" : "在 Canvas 账户设置中生成令牌"} /></label>
     <p className="settings-help">令牌保存在 Windows Credential Manager，不会写入日历数据库或日志。请在 Canvas 账户设置中自行生成。</p>
+    {canvasStatus.configured && !canvasStatus.accountVerified && <p className="settings-feedback">请先测试连接或立即同步以确认当前账户，确认前暂不显示历史账户的作业缓存。</p>}
     <div className="settings-actions"><button className="save-button" disabled={working || !token.trim()} onClick={() => void run(async () => { await onConnect(instance, token); setToken(""); })} type="button">安全保存令牌</button><button className="cancel-button" disabled={working || !canvasStatus.configured} onClick={() => void run(onTest)} type="button">测试连接</button><button className="cancel-button" disabled={working || !canvasStatus.configured} onClick={() => void run(onSync)} type="button">立即同步</button><button className="delete-button" disabled={working || !canvasStatus.configured} onClick={() => void run(onDisconnect)} type="button">断开连接</button></div>
     {problem && <div className="error-banner" role="alert">{problem}</div>}{notice && <p className="settings-feedback" role="status">{notice}</p>}
   </section>;
@@ -449,32 +487,6 @@ function SjtuSettings({ status, notice, onStart, onFinish, onDisconnect, onSync 
     <p className="settings-help">{suggestion ? `已根据上海交大教务处公告预填第 1 周周一和 ${suggestion.weekCount} 周；如你的校区或培养方案不同，可在同步前修改。` : "该学期暂无已核实的校历日期；请选择教务处公布的第 1 周周一。"} 课程时间按交大节次表映射。</p>
     <button className="save-button" disabled={working || !configured || !startDate || !year.trim()} onClick={() => void run(() => onSync(source, year, term, startDate, weekCount))} type="button">刷新课表</button>
     {problem && <div className="error-banner" role="alert">{problem}</div>}{notice && <p className="settings-feedback" role="status">{notice}</p>}
-  </section>;
-}
-
-function IcsImportSettings({ onImported }: { onImported: () => Promise<void> }) {
-  const [fileName, setFileName] = useState("");
-  const [content, setContent] = useState("");
-  const [firstMonday, setFirstMonday] = useState("");
-  const [weekCount, setWeekCount] = useState(16);
-  const [preview, setPreview] = useState<IcsPreview | null>(null);
-  const [replaceSource, setReplaceSource] = useState(true);
-  const [working, setWorking] = useState(false);
-  const [message, setMessage] = useState("");
-  const [problem, setProblem] = useState("");
-  async function run(action: () => Promise<void>) {
-    setWorking(true); setProblem(""); setMessage("");
-    try { await action(); } catch (reason) { setProblem(reason instanceof Error ? reason.message : "ICS 导入失败"); }
-    finally { setWorking(false); }
-  }
-  return <section className="settings-panel ics-settings"><div className="settings-title"><div className="settings-icon">ICS</div><div><h2>课表文件导入</h2><p>将课程 ICS 导入为本地个人日程；不会显示为教务同步成功。</p></div></div>
-    <label className="form-field"><span>ICS 文件</span><input type="file" accept=".ics,text/calendar" onChange={(event) => { const file = event.target.files?.[0]; setPreview(null); setMessage(""); if (!file) { setFileName(""); setContent(""); return; } setFileName(file.name); void file.text().then(setContent).catch(() => setProblem("无法读取所选文件")); }} /></label>
-    <div className="form-two sjtu-term-fields"><label className="form-field"><span>映射到学期首周周一</span><input type="date" value={firstMonday} onChange={(event) => { setFirstMonday(event.target.value); setPreview(null); }} /></label><label className="form-field"><span>教学周数（1–24）</span><input type="number" min={1} max={24} value={weekCount} onChange={(event) => { setWeekCount(Number(event.target.value)); setPreview(null); }} /></label></div>
-    <p className="settings-help">支持常规单次和每周重复 VEVENT；每周重复按学期范围展开。请核对预览中的课程和时间，再应用导入。当前不支持的复杂重复规则会明确报错。</p>
-    <label className="check-field"><input type="checkbox" checked={replaceSource} onChange={(event) => setReplaceSource(event.target.checked)} />替换同名来源之前导入的日程</label>
-    <div className="settings-actions"><button className="cancel-button" disabled={working || !content || !firstMonday} onClick={() => void run(async () => setPreview(await previewIcsImport(content, fileName, firstMonday, weekCount)))} type="button">预览导入</button><button className="save-button" disabled={working || !preview} onClick={() => void run(async () => { const count = await applyIcsImport(content, fileName, firstMonday, weekCount, replaceSource); setMessage(`已导入 ${count} 个本地日程（ICS 文件：${fileName}）`); setPreview(null); await onImported(); })} type="button">应用导入</button></div>
-    {preview && <div className="ics-preview" role="status"><strong>{preview.sourceName} · {preview.eventCount} 个日程</strong>{preview.preview.map((item, index) => <p key={`${item.startLocal}-${index}`}>{item.startLocal.replace("T", " ")} · {item.title}{item.location ? ` · ${item.location}` : ""}</p>)}{preview.eventCount > preview.preview.length && <small>仅显示前 {preview.preview.length} 项预览；应用时包含全部 {preview.eventCount} 项。</small>}</div>}
-    {problem && <div className="error-banner" role="alert">{problem}</div>}{message && <p className="settings-feedback" role="status">{message}</p>}
   </section>;
 }
 
@@ -532,6 +544,11 @@ function CourseDetails({ course, onClose, onSaveNote }: { course: SjtuCourseOccu
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="event-modal course-details" role="dialog" aria-modal="true" aria-labelledby="course-details-title"><header className="modal-header"><div><p className="eyebrow">{course.sourceSystem === "undergraduate" ? "本科教务" : "研究生教务"} · 第 {course.weekNumber} 周</p><h2 id="course-details-title">{course.title}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header><div className="form-scroll"><p><strong>时间：</strong>{new Intl.DateTimeFormat("zh-CN", { ...timeFormat, weekday: "long", month: "long", day: "numeric" }).format(new Date(course.startUtc))} · {new Intl.DateTimeFormat("zh-CN", timeFormat).format(new Date(course.startUtc))}–{new Intl.DateTimeFormat("zh-CN", timeFormat).format(new Date(course.endUtc))}</p><p><strong>地点：</strong>{course.location || "未提供"}</p><p><strong>教师：</strong>{course.teacher || "未提供"}</p><p><strong>节次：</strong>第 {course.startSection}–{course.endSection} 节</p><label className="form-field course-note-field"><span>本次课的备注</span><textarea aria-label="本次课的备注" maxLength={2000} rows={4} value={note} onChange={(event) => setNote(event.target.value)} placeholder="例如：带实验报告、去办公室答疑" /></label>{noteMessage && <p role="status" className="settings-feedback">{noteMessage}</p>}</div><footer className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>关闭</button><button className="save-button" type="button" disabled={savingNote} onClick={() => void saveNote()}>{savingNote ? "保存中…" : "保存备注"}</button></footer></section></div>;
 }
 
+function CanvasAssignmentDetails({ deadline, timezone, onClose }: { deadline: CanvasDeadline; timezone: string; onClose: () => void }) {
+  const due = new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, dateStyle: "full", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(deadline.dueAt));
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="event-modal course-details" role="dialog" aria-modal="true" aria-labelledby="canvas-details-title"><header className="modal-header"><div><p className="eyebrow">Canvas 作业</p><h2 id="canvas-details-title">{deadline.title}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header><div className="form-scroll"><p><strong>课程：</strong>{deadline.courseName}</p><p><strong>截止：</strong>{due}</p><p><strong>提交状态：</strong>{deadline.submittedAt ? "已提交" : deadline.localCompleted ? "已在本地标记完成" : "未完成"}</p>{deadline.description && <p className="canvas-detail-description">{deadline.description}</p>}<p><strong>Canvas 链接：</strong><a href={deadline.htmlUrl} target="_blank" rel="noreferrer">{deadline.htmlUrl}</a></p></div><footer className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>关闭</button></footer></section></div>;
+}
+
 function intervalLabel(startUtc: string, endUtc: string, timezone: string) {
   const format: Intl.DateTimeFormatOptions = { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
   return `${new Intl.DateTimeFormat("zh-CN", format).format(new Date(startUtc))}–${new Intl.DateTimeFormat("zh-CN", format).format(new Date(endUtc))}`;
@@ -561,11 +578,12 @@ function WeekView({ days, grouped, coursesByDay, selectedDate, today, timezone, 
       const timed = [...(grouped.get(day) ?? []).filter((item) => item.category !== "deadline" && !item.allDay), ...(coursesByDay.get(day) ?? [])];
       const overlapLayout = layoutOverlaps(timed);
       return <div className="time-column" key={day} onClick={(event) => quickAddFromTimeSlot(event, day)} title="单击空白时段快速添加日程">{Array.from({ length: LAST_HOUR - FIRST_HOUR + 1 }, (_, i) => <span className="hour-line" style={{ top: `${i * HOUR_HEIGHT}px` }} key={i} />)}{timed.map((item) => {
-        const start = clock(item.startUtc, timezone); const end = clock(item.endUtc, timezone);
-        const top = (start.hour + start.minute / 60 - FIRST_HOUR) * HOUR_HEIGHT;
-        let hours = (end.hour * 60 + end.minute - start.hour * 60 - start.minute) / 60;
-        if (hours <= 0) hours += 24;
-        const height = Math.max(27, Math.min(HOUR_HEIGHT * (LAST_HOUR - FIRST_HOUR) - top, hours * HOUR_HEIGHT));
+        const segment = dayMinutes(item, day, timezone);
+        const start = Math.max(FIRST_HOUR * 60, segment.start);
+        const end = Math.min((LAST_HOUR + 1) * 60, segment.end);
+        if (end <= start) return null;
+        const top = (start / 60 - FIRST_HOUR) * HOUR_HEIGHT;
+        const height = Math.min(Math.max(27, (end - start) / 60 * HOUR_HEIGHT), ((LAST_HOUR + 1) * 60 - start) / 60 * HOUR_HEIGHT);
         const position = overlapLayout.get(item.occurrenceId) ?? { column: 0, columns: 1 };
         const isCourse = "courseId" in item;
         const hasNote = "courseId" in item && item.note.length > 0;
@@ -589,12 +607,19 @@ function MonthView({ days, grouped, coursesByDay, selectedDate, today, selectedM
   })}</div></section>;
 }
 
-function EventEditor({ editor, timezone, busy, onClose, onSave, onDelete }: {
+type EventEditorProps = {
   editor: EditorState; timezone: string; busy: boolean; onClose: () => void;
   onSave: (draft: EventDraft, scope: "series" | "single") => Promise<void>;
   onDelete: (scope: "series" | "single") => Promise<void>;
-}) {
-  const initial = editor.event && editor.occurrence ? {
+};
+
+function EventEditor(props: EventEditorProps) {
+  const [scope, setScope] = useState<"single" | "series">(props.editor.event?.rrule && props.editor.occurrence ? "single" : "series");
+  return <EventEditorForm key={scope} {...props} scope={scope} onScopeChange={setScope} />;
+}
+
+function EventEditorForm({ editor, timezone, busy, onClose, onSave, onDelete, scope, onScopeChange }: EventEditorProps & { scope: "single" | "series"; onScopeChange: (scope: "single" | "series") => void }) {
+  const initial = scope === "single" && editor.event && editor.occurrence ? {
     ...editor.event,
     title: editor.occurrence.title,
     description: editor.occurrence.description,
@@ -605,6 +630,7 @@ function EventEditor({ editor, timezone, busy, onClose, onSave, onDelete }: {
     timezone: editor.occurrence.timezone,
     allDay: editor.occurrence.allDay,
     color: editor.occurrence.color,
+    includeInOverview: editor.occurrence.includeInOverview,
   } : editor.event ?? emptyDraft(editor.date, timezone, editor.startTime);
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description);
@@ -614,26 +640,27 @@ function EventEditor({ editor, timezone, busy, onClose, onSave, onDelete }: {
   const [end, setEnd] = useState(initial.endLocal.slice(0, 16));
   const [eventZone, setEventZone] = useState(initial.timezone);
   const [allDay, setAllDay] = useState(initial.allDay);
-  const [repeat, setRepeat] = useState(repeatLabel(initial.rrule));
+  const [includeInOverview, setIncludeInOverview] = useState(initial.includeInOverview ?? initial.category === "deadline");
+  const [repeat, setRepeat] = useState(initial.rrule ?? "");
   const [color, setColor] = useState(initial.color);
   const recurringOccurrence = !!editor.occurrence && !!editor.event?.rrule;
   const draft: EventDraft = {
     title, description, location, category, startLocal: localValue(start), endLocal: localValue(end), timezone: eventZone,
-    allDay, rrule: repeat === "每天" ? "FREQ=DAILY" : repeat === "每周" ? "FREQ=WEEKLY" : repeat === "每两周" ? "FREQ=WEEKLY;INTERVAL=2" : null, color,
+    allDay, rrule: repeat || null, color, includeInOverview,
   };
   function submit(event: FormEvent, scope: "series" | "single") { event.preventDefault(); void onSave(draft, scope); }
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><form className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title" onSubmit={(event) => submit(event, "series")}>
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><form className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title" onSubmit={(event) => submit(event, scope)}>
     <header className="modal-header"><div><p className="eyebrow">{editor.event ? "编辑本地日程" : "添加到个人日历"}</p><h2 id="event-modal-title">{editor.event ? "日程详情" : "新建日程"}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header>
-    <div className="form-scroll"><label className="form-field"><span>标题</span><input autoFocus required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：项目讨论" /></label>
-      <div className="form-two"><label className="form-field"><span>类型</span><select value={category} onChange={(event) => setCategory(event.target.value as EventDraft["category"])}><option value="event">日程</option><option value="deadline">截止事项</option></select></label><label className="form-field"><span>重复</span><select value={repeat} onChange={(event) => setRepeat(event.target.value)}><option>不重复</option><option>每天</option><option>每周</option><option>每两周</option></select></label></div>
+    <div className="form-scroll">{recurringOccurrence && <label className="form-field"><span>编辑范围（切换后重新载入对应日程）</span><select aria-label="编辑范围" value={scope} disabled={busy} onChange={(event) => onScopeChange(event.target.value as "single" | "series")}><option value="single">仅本次</option><option value="series">整个系列</option></select></label>}<label className="form-field"><span>标题</span><input autoFocus required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：项目讨论" /></label>
+      <div className="form-two"><label className="form-field"><span>类型</span><select value={category} onChange={(event) => { const value = event.target.value as EventDraft["category"]; setCategory(value); if (value === "deadline") setIncludeInOverview(true); }}><option value="event">日程</option><option value="deadline">截止事项</option></select></label><label className="form-field"><span>重复</span><select value={repeat} disabled={recurringOccurrence && scope === "single"} onChange={(event) => setRepeat(event.target.value)}><option value="">不重复</option><option value="FREQ=DAILY">每天</option><option value="FREQ=WEEKLY">每周</option><option value="FREQ=WEEKLY;INTERVAL=2">每两周</option>{repeat && !["FREQ=DAILY", "FREQ=WEEKLY", "FREQ=WEEKLY;INTERVAL=2"].includes(repeat) && <option value={repeat}>自定义规则（保留）</option>}</select></label></div>
       <div className="form-two"><label className="form-field"><span>开始</span><input required type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} /></label><label className="form-field"><span>结束</span><input required type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
       <div className="form-two"><label className="form-field"><span>时区</span><select value={eventZone} onChange={(event) => setEventZone(event.target.value)}>{ZONES.map((zone) => <option value={zone} key={zone}>{zone}</option>)}</select></label><label className="form-field color-field"><span>颜色</span><input type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label></div>
       <label className="check-field"><input type="checkbox" checked={allDay} onChange={(event) => setAllDay(event.target.checked)} />全天事件</label>
+      <label className="check-field"><input type="checkbox" checked={includeInOverview} onChange={(event) => setIncludeInOverview(event.target.checked)} />纳入 DDL 总览（按开始日期统计）</label>
       <label className="form-field"><span>地点</span><input maxLength={200} value={location} onChange={(event) => setLocation(event.target.value)} placeholder="添加地点" /></label>
       <label className="form-field"><span>备注</span><textarea rows={3} maxLength={4000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="添加说明" /></label>
     </div>
-    <footer className="modal-actions"><div>{editor.event && <button className="delete-button" disabled={busy} onClick={() => void onDelete("series")} type="button">删除日程</button>}</div><div><button className="cancel-button" onClick={onClose} type="button">取消</button>{recurringOccurrence ? <><button className="save-button secondary-save" disabled={busy} onClick={(event) => submit(event, "single")} type="button">保存此项</button><button className="save-button" disabled={busy} type="submit">保存整个系列</button></> : <button className="save-button" disabled={busy} type="submit">保存</button>}</div></footer>
-    {recurringOccurrence && <div className="occurrence-actions"><span>属于「{editor.event?.title}」系列</span><button type="button" onClick={() => void onDelete("single")} disabled={busy}>仅删除此项</button></div>}
+    <footer className="modal-actions"><div>{editor.event && <button className="delete-button" disabled={busy} onClick={() => void onDelete(scope)} type="button">{recurringOccurrence ? scope === "single" ? "仅删除此项" : "删除整个系列" : "删除日程"}</button>}</div><div><button className="cancel-button" onClick={onClose} type="button">取消</button><button className="save-button" disabled={busy} type="submit">{recurringOccurrence ? scope === "single" ? "保存此项" : "保存整个系列" : "保存"}</button></div></footer>
   </form></div>;
 }
 

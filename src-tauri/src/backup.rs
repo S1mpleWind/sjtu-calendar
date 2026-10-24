@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 const FORMAT: &str = "edu.sjtu.schedule.sqlite-backup.v1";
 const MAX_DATABASE_BYTES: usize = 64 * 1024 * 1024;
-const LATEST_SCHEMA: i64 = 6;
+use crate::db::LATEST_SCHEMA;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,6 +80,9 @@ pub fn restore(path: &Path, serialized: &str) -> Result<i64, String> {
             return Err(error);
         }
     };
+    // Credentials are outside the backup; its saved user may belong to another
+    // token. Rebind only after verifying the credential on this installation.
+    crate::canvas::invalidate_cached_identity(&temporary)?;
 
     if path.exists() {
         let connection = Connection::open(path).map_err(db_error)?;
@@ -171,7 +174,20 @@ mod tests {
         crate::db::initialize_database(&path).unwrap();
         let connection = Connection::open(&path).unwrap();
         connection.execute("INSERT INTO personal_events(id,title,start_local,end_local,timezone,created_at,updated_at) VALUES('event-1','Backed up','2026-10-20T09:00:00','2026-10-20T10:00:00','Asia/Shanghai','now','now')", []).unwrap();
+        connection
+            .execute(
+                "UPDATE personal_events SET include_in_overview=1 WHERE id='event-1'",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO app_settings(key,value_json) VALUES('canvas.active_user_id','\"42\"')",
+                [],
+            )
+            .unwrap();
         drop(connection);
+        crate::events::set_completion(&path, "event-1", "2026-10-20T09:00:00", true).unwrap();
         let envelope = export(&path).unwrap();
         Connection::open(&path)
             .unwrap()
@@ -187,6 +203,19 @@ mod tests {
             )
             .unwrap();
         assert_eq!(title, "Backed up");
+        let restored =
+            crate::events::calendar_occurrences(&path, "2026-10-20", "2026-10-20", "Asia/Shanghai")
+                .unwrap();
+        assert!(restored[0].include_in_overview && restored[0].overview_completed);
+        let saved_identity: i64 = Connection::open(&path)
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM app_settings WHERE key='canvas.active_user_id'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(saved_identity, 0);
     }
 
     #[test]

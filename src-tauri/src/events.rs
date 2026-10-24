@@ -2,7 +2,11 @@ use chrono::{DateTime, Duration, LocalResult, NaiveDate, NaiveDateTime, NaiveTim
 use chrono_tz::Tz;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use std::{path::Path, str::FromStr};
+use std::{
+    collections::{BTreeSet, HashSet},
+    path::Path,
+    str::FromStr,
+};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -27,6 +31,8 @@ pub struct EventDraft {
     pub rrule: Option<String>,
     #[serde(default = "default_color")]
     pub color: String,
+    #[serde(default)]
+    pub include_in_overview: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -55,6 +61,8 @@ pub struct CalendarOccurrence {
     pub display_timezone: String,
     pub all_day: bool,
     pub color: String,
+    pub include_in_overview: bool,
+    pub overview_completed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -69,6 +77,7 @@ pub struct RecurrenceOverride {
     pub timezone: Option<String>,
     pub all_day: Option<bool>,
     pub color: Option<String>,
+    pub include_in_overview: Option<bool>,
 }
 
 fn default_category() -> String {
@@ -165,13 +174,14 @@ fn draft_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PersonalEvent> {
             all_day: row.get(8)?,
             rrule: row.get(9)?,
             color: row.get(10)?,
+            include_in_overview: row.get(13)?,
         },
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
     })
 }
 
-const EVENT_COLUMNS: &str = "id,title,description,location,category,start_local,end_local,timezone,all_day,rrule,color,created_at,updated_at";
+const EVENT_COLUMNS: &str = "id,title,description,location,category,start_local,end_local,timezone,all_day,rrule,color,created_at,updated_at,include_in_overview";
 
 pub fn create_event(path: &Path, draft: EventDraft) -> Result<PersonalEvent, String> {
     let connection = open_database(path)?;
@@ -186,22 +196,31 @@ pub fn create_event_on(
     let id = Uuid::new_v4().to_string();
     let timestamp = now();
     connection.execute(
-        "INSERT INTO personal_events (id,title,description,location,category,start_local,end_local,timezone,all_day,rrule,color,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?12)",
-        params![id, draft.title.trim(), draft.description, draft.location, draft.category, draft.start_local, draft.end_local, draft.timezone, draft.all_day, draft.rrule, draft.color, timestamp],
+        "INSERT INTO personal_events (id,title,description,location,category,start_local,end_local,timezone,all_day,rrule,color,created_at,updated_at,include_in_overview) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?12,?13)",
+        params![id, draft.title.trim(), draft.description, draft.location, draft.category, draft.start_local, draft.end_local, draft.timezone, draft.all_day, draft.rrule, draft.color, timestamp, draft.include_in_overview],
     ).map_err(db_error)?;
     get_event_on(connection, &id)?.ok_or_else(|| "Created event could not be read back".into())
 }
 
 pub fn update_event(path: &Path, id: &str, draft: EventDraft) -> Result<PersonalEvent, String> {
-    let connection = open_database(path)?;
+    let mut connection = open_database(path)?;
     validate(&draft)?;
-    let changed = connection.execute(
-        "UPDATE personal_events SET title=?2,description=?3,location=?4,category=?5,start_local=?6,end_local=?7,timezone=?8,all_day=?9,rrule=?10,color=?11,updated_at=?12 WHERE id=?1 AND deleted_at IS NULL",
-        params![id, draft.title.trim(), draft.description, draft.location, draft.category, draft.start_local, draft.end_local, draft.timezone, draft.all_day, draft.rrule, draft.color, now()],
+    let previous = get_event_on(&connection, id)?.ok_or("Event was not found")?;
+    let transaction = connection.transaction().map_err(db_error)?;
+    let changed = transaction.execute(
+        "UPDATE personal_events SET title=?2,description=?3,location=?4,category=?5,start_local=?6,end_local=?7,timezone=?8,all_day=?9,rrule=?10,color=?11,updated_at=?12,include_in_overview=?13 WHERE id=?1 AND deleted_at IS NULL",
+        params![id, draft.title.trim(), draft.description, draft.location, draft.category, draft.start_local, draft.end_local, draft.timezone, draft.all_day, draft.rrule, draft.color, now(), draft.include_in_overview],
     ).map_err(db_error)?;
     if changed == 0 {
         return Err("Event was not found".into());
     }
+    if previous.draft.rrule.is_none()
+        && draft.rrule.is_none()
+        && previous.draft.start_local != draft.start_local
+    {
+        transaction.execute("UPDATE personal_event_completion SET original_start_local=?3 WHERE event_id=?1 AND original_start_local=?2", params![id, previous.draft.start_local, draft.start_local]).map_err(db_error)?;
+    }
+    transaction.commit().map_err(db_error)?;
     get_event_on(&connection, id)?.ok_or_else(|| "Updated event could not be read back".into())
 }
 
@@ -274,6 +293,11 @@ fn set_exception_on(
             ("cancelled", None) => None,
             ("override", Some(value)) => {
                 let mut draft = event.draft.clone();
+                let (base_start, base_end) = validate(&draft)?;
+                draft.start_local = original_dt.format("%Y-%m-%dT%H:%M:%S").to_string();
+                draft.end_local = (original_dt + (base_end - base_start))
+                    .format("%Y-%m-%dT%H:%M:%S")
+                    .to_string();
                 if let Some(v) = value.title {
                     draft.title = v;
                 }
@@ -301,6 +325,9 @@ fn set_exception_on(
                 if let Some(v) = value.color {
                     draft.color = v;
                 }
+                if let Some(v) = value.include_in_overview {
+                    draft.include_in_overview = v;
+                }
                 draft.rrule = None;
                 validate(&draft)?;
                 Some(serde_json::to_string(&draft).map_err(|error| error.to_string())?)
@@ -310,6 +337,17 @@ fn set_exception_on(
                     .into(),
             ),
         };
+    if !recurrence_contains(&event, original_dt)? {
+        return Err("Exception date is not an occurrence in this series".into());
+    }
+    connection.execute(
+        "INSERT INTO recurrence_exceptions (id,event_id,original_start_local,kind,override_json,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?6) ON CONFLICT(event_id,original_start_local) DO UPDATE SET kind=excluded.kind,override_json=excluded.override_json,updated_at=excluded.updated_at",
+        params![Uuid::new_v4().to_string(), event_id, original, kind, override_json, now()],
+    ).map_err(db_error)?;
+    Ok(())
+}
+
+fn recurrence_contains(event: &PersonalEvent, original_dt: NaiveDateTime) -> Result<bool, String> {
     let start = parse_local(&event.draft.start_local)?;
     let rule = event
         .draft
@@ -328,21 +366,13 @@ fn set_exception_on(
     let upper = (original_dt + Duration::seconds(1))
         .and_utc()
         .with_timezone(&rrule::Tz::UTC);
-    let is_occurrence = recurrence
+    Ok(recurrence
         .after(lower)
         .before(upper)
         .all(2)
         .dates
         .iter()
-        .any(|date| date.naive_utc() == original_dt);
-    if !is_occurrence {
-        return Err("Exception date is not an occurrence in this series".into());
-    }
-    connection.execute(
-        "INSERT INTO recurrence_exceptions (id,event_id,original_start_local,kind,override_json,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?6) ON CONFLICT(event_id,original_start_local) DO UPDATE SET kind=excluded.kind,override_json=excluded.override_json,updated_at=excluded.updated_at",
-        params![Uuid::new_v4().to_string(), event_id, original, kind, override_json, now()],
-    ).map_err(db_error)?;
-    Ok(())
+        .any(|date| date.naive_utc() == original_dt))
 }
 
 #[derive(Deserialize)]
@@ -364,32 +394,32 @@ fn localize_occurrence(
         .timezone
         .parse()
         .map_err(|_| "Unknown event timezone".to_string())?;
-    let Some(start) = resolve_recurrence_start(event_tz, original_start) else {
-        return Ok(None);
-    };
-    let end = start + duration;
     let mut draft = event.draft.clone();
+    let is_override = exception
+        .as_ref()
+        .is_some_and(|value| value.kind == "override");
     if let Some(exception) = exception {
         match exception.kind.as_str() {
             "cancelled" => return Ok(None),
             "override" => {
-                let override_draft: EventDraft = serde_json::from_str(
+                let raw: serde_json::Value = serde_json::from_str(
                     exception
                         .override_json
                         .as_deref()
                         .ok_or("Missing exception override")?,
                 )
                 .map_err(|error| error.to_string())?;
+                let mut override_draft: EventDraft =
+                    serde_json::from_value(raw.clone()).map_err(|error| error.to_string())?;
+                if raw.get("includeInOverview").is_none() {
+                    override_draft.include_in_overview = event.draft.include_in_overview;
+                }
                 draft = override_draft;
             }
             _ => return Err("Invalid recurrence exception".into()),
         }
     }
-    let (start_dt, end_dt) = if draft.rrule.is_none()
-        && (draft.start_local != event.draft.start_local
-            || draft.end_local != event.draft.end_local
-            || draft.timezone != event.draft.timezone)
-    {
+    let (start_dt, end_dt) = if is_override {
         let (resolved_start, resolved_end) = validate(&draft)?;
         let event_tz: Tz = draft
             .timezone
@@ -400,7 +430,10 @@ fn localize_occurrence(
             resolve_local(event_tz, resolved_end)?,
         )
     } else {
-        (start, end)
+        let Some(start) = resolve_recurrence_start(event_tz, original_start) else {
+            return Ok(None);
+        };
+        (start, start + duration)
     };
     Ok(Some(CalendarOccurrence {
         occurrence_id: format!(
@@ -420,6 +453,8 @@ fn localize_occurrence(
         display_timezone: display_tz.to_string(),
         all_day: draft.all_day,
         color: draft.color,
+        include_in_overview: draft.include_in_overview,
+        overview_completed: false,
     }))
 }
 
@@ -489,7 +524,28 @@ pub fn calendar_occurrences_on(
         } else {
             vec![base_start]
         };
+        let mut starts: BTreeSet<_> = starts.into_iter().collect();
+        // An override can move into this range from an original date outside it.
+        // Include those identities, then apply the same final UTC overlap filter.
+        if event.draft.rrule.is_some() {
+            let mut moved_stmt = connection.prepare("SELECT original_start_local FROM recurrence_exceptions WHERE event_id=?1 AND kind='override'").map_err(db_error)?;
+            let moved = moved_stmt
+                .query_map([&event.id], |row| row.get::<_, String>(0))
+                .map_err(db_error)?;
+            for original in moved {
+                let original = parse_local(&original.map_err(db_error)?)?;
+                if !starts.contains(&original) && recurrence_contains(&event, original)? {
+                    starts.insert(original);
+                }
+            }
+        }
         let mut exception_stmt = connection.prepare("SELECT kind,override_json FROM recurrence_exceptions WHERE event_id=?1 AND original_start_local=?2").map_err(db_error)?;
+        let mut completion_stmt = connection.prepare("SELECT original_start_local FROM personal_event_completion WHERE event_id=?1 AND completed=1").map_err(db_error)?;
+        let completed: HashSet<String> = completion_stmt
+            .query_map([&event.id], |row| row.get(0))
+            .map_err(db_error)?
+            .collect::<rusqlite::Result<_>>()
+            .map_err(db_error)?;
         for occurrence_start in starts {
             let original = occurrence_start.format("%Y-%m-%dT%H:%M:%S").to_string();
             let exception = exception_stmt
@@ -501,7 +557,7 @@ pub fn calendar_occurrences_on(
                 })
                 .optional()
                 .map_err(db_error)?;
-            if let Some(occurrence) =
+            if let Some(mut occurrence) =
                 localize_occurrence(&event, occurrence_start, display_tz, exception)?
             {
                 let start_utc = DateTime::parse_from_rfc3339(&occurrence.start_utc)
@@ -511,6 +567,7 @@ pub fn calendar_occurrences_on(
                     .map_err(|error| error.to_string())?
                     .with_timezone(&Utc);
                 if start_utc < range_end && end_utc > range_start {
+                    occurrence.overview_completed = completed.contains(&original);
                     output.push(occurrence);
                 }
             }
@@ -518,6 +575,38 @@ pub fn calendar_occurrences_on(
     }
     output.sort_by(|a, b| a.start_utc.cmp(&b.start_utc).then(a.title.cmp(&b.title)));
     Ok(output)
+}
+
+pub fn set_completion(
+    path: &Path,
+    event_id: &str,
+    original: &str,
+    completed: bool,
+) -> Result<(), String> {
+    let connection = open_database(path)?;
+    let original_dt = parse_local(original)?;
+    let event = get_event_on(&connection, event_id)?.ok_or("日程不存在或已删除")?;
+    let valid = if event.draft.rrule.is_some() {
+        recurrence_contains(&event, original_dt)?
+    } else {
+        original_dt == parse_local(&event.draft.start_local)?
+    };
+    if !valid {
+        return Err("这一天不属于该日程".into());
+    }
+    let exception = connection.query_row("SELECT kind,override_json FROM recurrence_exceptions WHERE event_id=?1 AND original_start_local=?2", params![event_id, original], |row| Ok(ExceptionRow { kind: row.get(0)?, override_json: row.get(1)? })).optional().map_err(db_error)?;
+    let occurrence = localize_occurrence(
+        &event,
+        original_dt,
+        parse_timezone(&event.draft.timezone)?,
+        exception,
+    )?
+    .ok_or("这次日程已取消")?;
+    if !occurrence.include_in_overview {
+        return Err("请先将此日程纳入 DDL 总览".into());
+    }
+    connection.execute("INSERT INTO personal_event_completion(event_id,original_start_local,completed,updated_at) VALUES(?1,?2,?3,?4) ON CONFLICT(event_id,original_start_local) DO UPDATE SET completed=excluded.completed,updated_at=excluded.updated_at", params![event_id, original, completed, now()]).map_err(db_error)?;
+    Ok(())
 }
 
 fn db_error(error: rusqlite::Error) -> String {
@@ -546,6 +635,7 @@ mod tests {
             all_day: false,
             rrule: rule.map(str::to_string),
             color: "#123ABC".into(),
+            include_in_overview: false,
         }
     }
 
@@ -640,6 +730,7 @@ mod tests {
             timezone: Some("Asia/Shanghai".into()),
             all_day: None,
             color: None,
+            include_in_overview: None,
         };
         set_exception_on(
             &connection,
@@ -657,6 +748,230 @@ mod tests {
         assert_eq!(moved.start_utc, "2026-11-04T12:00:00+00:00");
         assert_eq!(moved.display_timezone, "Asia/Tokyo");
         assert_eq!(results[0].original_start_local, "2026-10-28T23:30:00");
+    }
+
+    #[test]
+    fn moved_occurrence_is_found_by_destination_range_without_duplicates() {
+        let connection = database();
+        let created = create_event_on(
+            &connection,
+            event(
+                "2026-10-19T09:00:00",
+                "2026-10-19T10:00:00",
+                Some("FREQ=WEEKLY;COUNT=3"),
+            ),
+        )
+        .unwrap();
+        let change = serde_json::from_value(serde_json::json!({
+            "startLocal": "2026-11-10T23:30:00", "endLocal": "2026-11-11T01:00:00"
+        }))
+        .unwrap();
+        set_exception_on(
+            &connection,
+            &created.id,
+            "2026-10-19T09:00:00".into(),
+            "override".into(),
+            Some(change),
+        )
+        .unwrap();
+        assert!(
+            calendar_occurrences_on(&connection, "2026-10-19", "2026-10-19", "Asia/Shanghai")
+                .unwrap()
+                .is_empty()
+        );
+        let destination =
+            calendar_occurrences_on(&connection, "2026-11-09", "2026-11-15", "Asia/Shanghai")
+                .unwrap();
+        assert_eq!(destination.len(), 1);
+        assert_eq!(destination[0].original_start_local, "2026-10-19T09:00:00");
+        assert_eq!(
+            calendar_occurrences_on(&connection, "2026-11-11", "2026-11-11", "Asia/Shanghai")
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            calendar_occurrences_on(&connection, "2026-10-01", "2026-11-30", "Asia/Shanghai")
+                .unwrap()
+                .len(),
+            3
+        );
+        set_exception_on(
+            &connection,
+            &created.id,
+            "2026-10-19T09:00:00".into(),
+            "cancelled".into(),
+            None,
+        )
+        .unwrap();
+        assert!(
+            calendar_occurrences_on(&connection, "2026-11-09", "2026-11-15", "Asia/Shanghai")
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn override_preserves_its_occurrence_date_and_can_move_back_to_series_start() {
+        let connection = database();
+        let created = create_event_on(
+            &connection,
+            event(
+                "2026-10-19T09:00:00",
+                "2026-10-19T10:00:00",
+                Some("FREQ=WEEKLY;COUNT=3"),
+            ),
+        )
+        .unwrap();
+        let change = serde_json::from_value(serde_json::json!({"title":"Renamed once"})).unwrap();
+        set_exception_on(
+            &connection,
+            &created.id,
+            "2026-10-26T09:00:00".into(),
+            "override".into(),
+            Some(change),
+        )
+        .unwrap();
+        let once =
+            calendar_occurrences_on(&connection, "2026-10-26", "2026-10-26", "Asia/Shanghai")
+                .unwrap();
+        assert_eq!(once.len(), 1);
+        assert_eq!(once[0].start_utc, "2026-10-26T01:00:00+00:00");
+        let change = serde_json::from_value(serde_json::json!({"startLocal":"2026-10-19T09:00:00","endLocal":"2026-10-19T10:00:00"})).unwrap();
+        set_exception_on(
+            &connection,
+            &created.id,
+            "2026-10-26T09:00:00".into(),
+            "override".into(),
+            Some(change),
+        )
+        .unwrap();
+        let moved =
+            calendar_occurrences_on(&connection, "2026-10-19", "2026-10-19", "Asia/Shanghai")
+                .unwrap();
+        assert_eq!(moved.len(), 2);
+        assert_ne!(moved[0].occurrence_id, moved[1].occurrence_id);
+        assert!(
+            calendar_occurrences_on(&connection, "2026-10-26", "2026-10-26", "Asia/Shanghai")
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn overview_completion_is_persistent_per_occurrence_and_follows_a_move() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("calendar.sqlite3");
+        crate::db::initialize_database(&path).unwrap();
+        let mut draft = event(
+            "2026-10-19T09:00:00",
+            "2026-10-19T10:00:00",
+            Some("FREQ=WEEKLY;COUNT=3"),
+        );
+        draft.include_in_overview = true;
+        let saved = create_event(&path, draft).unwrap();
+        set_completion(&path, &saved.id, "2026-10-26T09:00:00", true).unwrap();
+        let items =
+            calendar_occurrences(&path, "2026-10-01", "2026-11-30", "Asia/Shanghai").unwrap();
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.overview_completed)
+                .collect::<Vec<_>>(),
+            [false, true, false]
+        );
+        assert!(items.iter().all(|item| item.include_in_overview));
+        let change = serde_json::from_value(serde_json::json!({"startLocal":"2026-11-10T09:00:00","endLocal":"2026-11-10T10:00:00"})).unwrap();
+        set_exception(
+            &path,
+            &saved.id,
+            "2026-10-26T09:00:00".into(),
+            "override".into(),
+            Some(change),
+        )
+        .unwrap();
+        let moved =
+            calendar_occurrences(&path, "2026-11-10", "2026-11-10", "Asia/Shanghai").unwrap();
+        assert_eq!(moved.len(), 1);
+        assert!(moved[0].overview_completed);
+        set_completion(&path, &saved.id, "2026-10-26T09:00:00", false).unwrap();
+        assert!(
+            !calendar_occurrences(&path, "2026-11-10", "2026-11-10", "Asia/Shanghai").unwrap()[0]
+                .overview_completed
+        );
+        assert!(set_completion(&path, &saved.id, "2026-10-20T09:00:00", true).is_err());
+        set_exception(
+            &path,
+            &saved.id,
+            "2026-10-26T09:00:00".into(),
+            "cancelled".into(),
+            None,
+        )
+        .unwrap();
+        assert!(set_completion(&path, &saved.id, "2026-10-26T09:00:00", true).is_err());
+    }
+
+    #[test]
+    fn moving_a_completed_non_recurring_event_keeps_its_completion() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("calendar.sqlite3");
+        crate::db::initialize_database(&path).unwrap();
+        let mut draft = event("2026-10-19T09:00:00", "2026-10-19T10:00:00", None);
+        draft.include_in_overview = true;
+        let saved = create_event(&path, draft.clone()).unwrap();
+        set_completion(&path, &saved.id, "2026-10-19T09:00:00", true).unwrap();
+        draft.start_local = "2026-10-20T09:00:00".into();
+        draft.end_local = "2026-10-20T10:00:00".into();
+        update_event(&path, &saved.id, draft).unwrap();
+        let items =
+            calendar_occurrences(&path, "2026-10-19", "2026-10-20", "Asia/Shanghai").unwrap();
+        assert_eq!(items.len(), 1);
+        assert!(items[0].overview_completed);
+        assert_eq!(items[0].original_start_local, "2026-10-20T09:00:00");
+    }
+
+    #[test]
+    fn overview_opt_in_can_apply_to_one_occurrence_only() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("calendar.sqlite3");
+        crate::db::initialize_database(&path).unwrap();
+        let saved = create_event(
+            &path,
+            event(
+                "2026-10-19T09:00:00",
+                "2026-10-19T10:00:00",
+                Some("FREQ=WEEKLY;COUNT=2"),
+            ),
+        )
+        .unwrap();
+        assert!(set_completion(&path, &saved.id, "2026-10-19T09:00:00", true).is_err());
+        let change = serde_json::from_value(serde_json::json!({"includeInOverview":true})).unwrap();
+        set_exception(
+            &path,
+            &saved.id,
+            "2026-10-19T09:00:00".into(),
+            "override".into(),
+            Some(change),
+        )
+        .unwrap();
+        set_completion(&path, &saved.id, "2026-10-19T09:00:00", true).unwrap();
+        let items =
+            calendar_occurrences(&path, "2026-10-01", "2026-10-31", "Asia/Shanghai").unwrap();
+        assert!(items[0].include_in_overview && items[0].overview_completed);
+        assert!(!items[1].include_in_overview && !items[1].overview_completed);
+        // v6 exception snapshots have no opt-in field; inherit the migrated parent.
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute(
+                "UPDATE personal_events SET include_in_overview=1 WHERE id=?1",
+                [&saved.id],
+            )
+            .unwrap();
+        connection.execute("UPDATE recurrence_exceptions SET override_json=json_remove(override_json,'$.includeInOverview') WHERE event_id=?1", [&saved.id]).unwrap();
+        assert!(
+            calendar_occurrences(&path, "2026-10-19", "2026-10-19", "Asia/Shanghai").unwrap()[0]
+                .include_in_overview
+        );
     }
 
     #[test]

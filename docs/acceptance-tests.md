@@ -83,3 +83,33 @@
 - [x] Single-clicking an empty week time slot opens the event editor with the clicked time rounded to 15 minutes and a one-hour default duration.
 - [x] Clicking an existing event continues to open its detail editor.
 - [x] `pnpm lint`, `pnpm test` (13 passed), and `pnpm build` passed.
+
+## Desktop Widget (`feat/desktop-widget`)
+
+- [x] Widget uses live local SQLite-backed commands for today's calendar/SJTU entries and upcoming personal/Canvas deadlines; no runtime mock data or credential flow is involved.
+- [x] Clicked course, personal event, and Canvas deadline route to the corresponding main-window detail; optional always-on-top preference persists in app data.
+- [x] The Widget's “主程序” control calls the main-window wake command.
+- [x] `cargo fmt --check`, `cargo test`, `pnpm lint`, `pnpm test`, `pnpm build`; Windows `pnpm tauri build` result is recorded in `docs/development-log.md`.
+- [ ] Manual native acceptance: verify startup shows only the compact Widget while the main window stays in the tray; show/hide/quit via tray; visually inspect transparency/Mica; drag, resize, restart with saved bounds, test always-on-top and click-through. Test on a second display if available.
+# Calendar consistency regression checks — 2026-10-23
+
+- Frontend: `pnpm lint`, `pnpm test` (25 passed), and `pnpm build` passed.
+- Windows packaging: `pnpm tauri build` passed; a local installer is retained as `SJTU.Schedule_1.0.0_c662069_x64-setup.exe` (3,592,002 bytes).
+- Rust: `cargo test` (23 passed); regression coverage includes moved recurrence lookup, preserving dates for title-only overrides, moving an instance back to the series start, explicit account selection, invalidating stale account requests, and resetting identity on restore.
+- UI regression coverage includes preserving original series dates/full RRULE, single-occurrence saves, overnight segmentation in week/month views, midnight exclusivity, DST date grouping, Widget data/timezone notifications, listener cleanup, and out-of-order cache reads.
+- Not rechecked manually: packaged dual-window notification delivery, native Widget rendering, and real Canvas/SJTU authentication. Fixture/API-command tests are not a claim of live account validation.
+
+## Monthly DDL overview — 2026-10-24
+
+- `pnpm lint`, `pnpm test` (29 passed), `pnpm build`, and `cargo test` (27 passed) completed successfully.
+- `pnpm tauri build` passed; local installer `SJTU.Schedule_1.0.0_ddl-overview_15c065f_x64-setup.exe` is 3,600,019 bytes.
+- UI tests cover the sidebar entry, opt-in checkbox, monthly queries, gray empty days, red mixed-source days, yellow all-complete days, unchecking back to red, and reloading completion from backend state.
+- Rust tests cover migration v6→v7 with existing data, one-time inclusion of old local deadlines, independent recurrence completion, moves/cancellations, invalid completion requests, and backup/restore of overview state.
+- Native visual review is not claimed: Windows computer-use could not connect to its native pipe; browser inventory was empty. No account credentials or fabricated runtime sync records were used.
+
+## v1.1.0 — ICS removal
+
+- ICS settings, frontend API, Tauri commands and parser are removed. Historical Phase 4 checks above describe the earlier implementation.
+- Existing import metadata/migration and stored personal events remain compatible with upgrades and backup restore.
+- `pnpm lint`, `pnpm test` (28 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (24 passed) and `git diff --check` passed. Settings regression coverage confirms that the import controls are absent while SJTU sign-in remains available.
+- Packaged install/uninstall, native visual review and live account synchronization have not been revalidated in this change.

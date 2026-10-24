@@ -4,8 +4,9 @@ export interface BackendStatus {
   database: "sqlite";
   schemaVersion: number;
 }
+export interface WidgetStatus { canvasLastSuccessAt: string | null; sjtuLastSuccessAt: string | null; alwaysOnTop: boolean }
 
-export interface CanvasConnectionStatus { configured: boolean; instanceUrl: string | null }
+export interface CanvasConnectionStatus { configured: boolean; instanceUrl: string | null; accountVerified: boolean }
 export interface CanvasProfile { userId: string; name: string; instanceUrl: string }
 export interface CanvasSyncResult { state: string; courseCount: number; assignmentCount: number; failedCourses: string[]; syncedAt: string }
 export interface CanvasDeadline {
@@ -22,12 +23,6 @@ export interface SjtuCourseOccurrence {
   meetingId: string; note: string;
 }
 
-export interface IcsPreview {
-  sourceName: string;
-  eventCount: number;
-  preview: Array<{ title: string; startLocal: string; endLocal: string; location: string }>;
-}
-
 export interface EventDraft {
   title: string;
   description: string;
@@ -39,6 +34,7 @@ export interface EventDraft {
   allDay: boolean;
   rrule: string | null;
   color: string;
+  includeInOverview: boolean;
 }
 
 export interface PersonalEvent extends EventDraft {
@@ -57,6 +53,7 @@ export interface RecurrenceOverride {
   timezone?: string | null;
   allDay?: boolean | null;
   color?: string | null;
+  includeInOverview?: boolean | null;
 }
 
 export interface CalendarOccurrence {
@@ -73,11 +70,20 @@ export interface CalendarOccurrence {
   displayTimezone: string;
   allDay: boolean;
   color: string;
+  includeInOverview: boolean;
+  overviewCompleted: boolean;
 }
 
 export function getBackendStatus(): Promise<BackendStatus> {
   return invoke<BackendStatus>("get_backend_status");
 }
+
+export const getWidgetStatus = () => invoke<WidgetStatus>("get_widget_status");
+export const toggleWidget = () => invoke<void>("toggle_widget");
+export const showMainWindow = () => invoke<void>("show_main_window");
+export const hideWidget = () => invoke<void>("hide_widget");
+export const setWidgetAlwaysOnTop = (enabled: boolean) =>
+  invoke<void>("set_widget_always_on_top", { enabled });
 
 export const exportDataBackup = () => invoke<string>("export_data_backup");
 export const restoreDataBackup = (backupJson: string) =>
@@ -91,6 +97,9 @@ export const updatePersonalEvent = (id: string, event: EventDraft) =>
 
 export const deletePersonalEvent = (id: string) =>
   invoke<void>("delete_personal_event", { id });
+
+export const setPersonalEventCompleted = (eventId: string, originalStartLocal: string, completed: boolean) =>
+  invoke<void>("set_personal_event_completed", { eventId, originalStartLocal, completed });
 
 export const getPersonalEvent = (id: string) =>
   invoke<PersonalEvent | null>("get_personal_event", { id });
@@ -146,7 +155,3 @@ export const getSjtuCourseOccurrences = (fromDate: string, toDate: string, displ
   invoke<SjtuCourseOccurrence[]>("get_sjtu_course_occurrences", { fromDate, toDate, displayTimezone });
 export const setSjtuOccurrenceNote = (meetingId: string, weekNumber: number, note: string) =>
   invoke<void>("set_sjtu_occurrence_note", { meetingId, weekNumber, note });
-export const previewIcsImport = (content: string, sourceName: string, firstMonday: string, weekCount: number) =>
-  invoke<IcsPreview>("preview_ics_import", { content, sourceName, firstMonday, weekCount });
-export const applyIcsImport = (content: string, sourceName: string, firstMonday: string, weekCount: number, replaceSource: boolean) =>
-  invoke<number>("apply_ics_import", { content, sourceName, firstMonday, weekCount, replaceSource });

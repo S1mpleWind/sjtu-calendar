@@ -2,12 +2,16 @@
 
 ## Current after Phase 4
 
+- The new monthly DDL overview has automated interaction/migration/backup coverage, but native visual acceptance remains outstanding: the Windows computer-use helper reports an unavailable native pipe, and no browser automation connection is present on this machine.
+
 - SJTU endpoints and response fields are `CONFIRMED_BY_SOURCE` only. No real SJTU account or live response has been verified. Follow the steps in `docs/integration-sjtu.md` before describing the connection as live-validated.
 - Saved SJTU cookies are read from an isolated login WebView and stored in Windows Credential Manager. The connection badge means only “session saved”; undergraduate session acceptance is checked by attempting the schedule request.
 - SJTU course payloads do not include academic term start dates. First-week dates are auto-filled only for terms verified from official notices and remain editable; other terms still need a date entered by the user.
-- ICS import is a fallback for standard one-off and weekly course VEVENTs. BYDAY/multiple weekday recurrence, EXDATE/RDATE, VTIMEZONE-only definitions and complex recurrence rules are rejected or unsupported; no previewed import is applied until the user chooses Apply.
 - Manual native-window login, Credential Manager cleanup, real SJTU schedule comparison, WebView resize/high-DPI review and Windows installer testing remain outstanding.
 - Phase 5 generated the NSIS x64 installer. Manual install/uninstall, packaged WebView, and persistence review are outstanding; backup/export and the operations guide are implemented.
+- Desktop Widget is included in v1.0.0 on `feat/desktop-widget`; native move/resize, persisted window bounds, tray interactions, packaged startup and multi-monitor behavior still need manual Windows acceptance.
+- Widget uses Tauri transparency and Windows Acrylic with a translucent CSS surface. Opacity and backdrop rendering vary by Windows version and compositor and still require a visual check on the user's machine.
+- After upgrading from v1.0.0's unbound Canvas cache, replacing credentials, or restoring a backup, use Test Connection or Sync once to bind the current Canvas account. Existing cached rows are retained but hidden until that identity is verified; subsequent offline reads use the bound account.
 - Installer launch/uninstall and restore interaction in a packaged WebView have not yet been manually exercised; automated backup/restore tests use temporary SQLite databases.
 
 - Historical Phase 0 started with a Tauri desktop shell and a single migration; later phase notes below document the completed additions.

@@ -14,7 +14,9 @@ Rust owns validation, RRULE expansion, exception application and SQLite access. 
 
 ## Phase 3: Canvas cache (schema v3)
 
-`canvas_courses` and `canvas_assignments` are keyed by instance, Canvas user and remote object identifiers. Assignment rows keep the remote submission state, deadline, course/title/description and last sync time alongside `local_completed`, which is user-owned and retained across remote upserts. `canvas_sync_state` records sync status and counts. Credentials are excluded from all SQLite tables: only the selected instance origin is in `app_settings`; the token is in Windows Credential Manager. Cached Canvas assignments are read-only remote records apart from the local completion flag.
+`canvas_courses` and `canvas_assignments` are keyed by instance, Canvas user and remote object identifiers. Assignment rows keep the remote submission state, deadline, course/title/description and last sync time alongside `local_completed`, which is user-owned and retained across remote upserts. `canvas_sync_state` records sync status and counts. Credentials are excluded from all SQLite tables: only non-secret instance/account settings are in `app_settings`; the token is in Windows Credential Manager. Cached Canvas assignments are read-only remote records apart from the local completion flag.
+
+The account selection additionally stores `canvas.active_user_id` (a verified remote identity) and `canvas.credential_revision` (a random, non-secret configuration revision) in `app_settings`. Neither is a token. Credential replacement clears the selected user; stale requests cannot write data when their revision no longer matches. Restore clears the selection because a backup does not carry its matching Credential Manager secret. No schema migration or cache deletion is needed.
 
 ## Phase 4: SJTU course cache (schema v4)
 
@@ -22,6 +24,14 @@ Rust owns validation, RRULE expansion, exception application and SQLite access. 
 
 Schema v6 adds `course_occurrence_notes`, keyed by meeting and teaching week. A note belongs to one dated class occurrence and survives schedule refreshes; clearing the note deletes only that occurrence's row.
 
-## Phase 4 fallback: ICS imports (schema v5)
+## Legacy import metadata (schema v5)
 
-`personal_events.import_source` and `import_key` mark events created by an ICS import. A partial unique index prevents duplicate active occurrences for a source. Replacing a source soft-deletes its prior occurrences and inserts the previewed set in one transaction; imported records remain local personal events and do not populate `sjtu_sync_state`. The original ICS content is not persisted. Database backup exports a checkpointed SQLite image in a versioned JSON envelope; restore validates SHA-256 and SQLite integrity before migration and file replacement. Credential Manager entries are outside the database.
+`personal_events.import_source` and `import_key` retain legacy import provenance and its partial unique index. ICS import was removed in v1.1.0; these columns and migration v5 remain so existing databases, imported personal events and backups continue to work. Database backup exports a checkpointed SQLite image in a versioned JSON envelope; restore validates SHA-256 and SQLite integrity before migration and file replacement. Credential Manager entries are outside the database.
+
+## DDL overview (schema v7)
+
+`personal_events.include_in_overview` is an explicit opt-in for any local event. Existing local `deadline` rows are opted in once during migration; ordinary events and imported course events default to false. Recurrence overrides can change opt-in for one occurrence, while legacy override JSON inherits the migrated parent value.
+
+`personal_event_completion(event_id, original_start_local, completed, updated_at)` stores independent completion for each local occurrence. A moved recurring override keeps its original identity; moving a non-recurring event relocates its completion key in the event-update transaction. Cancelled/deleted and opted-out occurrences do not contribute to the overview. Both settings and completion rows are included in database backups.
+
+The overview groups local opted-in occurrences by their start date and Canvas assignments by `due_at`, using the selected display timezone. Empty days are gray, any incomplete item makes a day red, and all complete items make it yellow. Canvas completion combines the existing local completion mark with remote submission state; its remote metadata is not modified.
