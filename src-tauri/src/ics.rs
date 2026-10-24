@@ -272,6 +272,7 @@ fn expand_event(
                     all_day,
                     rrule: None,
                     color: "#4adbc8".into(),
+                    include_in_overview: false,
                 },
             });
         }

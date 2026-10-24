@@ -55,10 +55,13 @@ describe("calendar window", () => {
     await user.click(screen.getAllByRole("button", { name: /新建日程/ })[0]);
     const dialog = await screen.findByRole("dialog", { name: "新建日程" });
     await user.type(screen.getByLabelText("标题"), "项目讨论");
+    const overview = screen.getByRole("checkbox", { name: /纳入 DDL 总览/ });
+    expect(overview).not.toBeChecked();
+    await user.click(overview);
     await user.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => expect(invoke).toHaveBeenCalledWith("create_personal_event", expect.objectContaining({
-      event: expect.objectContaining({ title: "项目讨论", timezone: "Asia/Shanghai", rrule: null }),
+      event: expect.objectContaining({ title: "项目讨论", timezone: "Asia/Shanghai", rrule: null, includeInOverview: true }),
     })));
     expect(dialog).not.toBeInTheDocument();
   });
@@ -268,5 +271,42 @@ describe("calendar window", () => {
     expect(blocks[1].style.height).toBe("192px");
     await user.click(screen.getByRole("button", { name: "月" }));
     await waitFor(() => expect(container.querySelectorAll(".month-event")).toHaveLength(2));
+  });
+
+  it("opens the monthly DDL overview and turns a mixed day yellow only after all items are complete", async () => {
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const month = day.slice(0,7);
+    const emptyDay = month + (day.endsWith("01") ? "-02" : "-01");
+    let localComplete = false;
+    let canvasComplete = false;
+    const original = invoke.getMockImplementation()!;
+    invoke.mockImplementation((command: string, args: unknown) => {
+      if (command === "get_calendar_occurrences") return Promise.resolve([{ occurrenceId: "local-ddl", eventId: "event", originalStartLocal: day + "T09:00:00", title: "写报告", category: "event", description: "", location: "", startUtc: day + "T01:00:00Z", endUtc: day + "T02:00:00Z", timezone: "Asia/Shanghai", allDay: false, color: "#34785c", includeInOverview: true, overviewCompleted: localComplete }]);
+      if (command === "get_canvas_deadlines") return Promise.resolve([{ instanceUrl: "https://oc.sjtu.edu.cn", userId: "42", courseId: "7", assignmentId: "9", title: "实验作业", courseName: "程序设计", dueAt: day + "T15:59:00Z", submittedAt: null, workflowState: "unsubmitted", localCompleted: canvasComplete }]);
+      if (command === "set_personal_event_completed") { localComplete = (args as { completed: boolean }).completed; return Promise.resolve(); }
+      if (command === "set_canvas_assignment_completed") { canvasComplete = (args as { completed: boolean }).completed; return Promise.resolve(); }
+      return original(command, args);
+    });
+    const user = userEvent.setup(); const { unmount } = render(<App />);
+    await user.click(screen.getByRole("button", { name: "DDL 总览" }));
+    const circle = () => screen.getByRole("button", { name: new RegExp(`^${day} `) });
+    await waitFor(() => expect(circle()).toHaveClass("pending"));
+    expect(screen.getByRole("button", { name: new RegExp(`^${emptyDay} `) })).toHaveClass("empty");
+    await user.click(screen.getByRole("checkbox", { name: "完成 写报告" }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("set_personal_event_completed", { eventId: "event", originalStartLocal: day + "T09:00:00", completed: true }));
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "完成 写报告" })).toBeChecked());
+    expect(circle()).toHaveClass("pending");
+    await user.click(screen.getByRole("checkbox", { name: "完成 实验作业" }));
+    await waitFor(() => expect(circle()).toHaveClass("complete"));
+    // Reload the UI from backend state, rather than retaining component flags.
+    unmount(); render(<App />);
+    await user.click(screen.getByRole("button", { name: "DDL 总览" }));
+    await waitFor(() => expect(circle()).toHaveClass("complete"));
+    await user.click(screen.getByRole("checkbox", { name: "完成 写报告" }));
+    await waitFor(() => expect(circle()).toHaveClass("pending"));
+    await user.click(screen.getByRole("button", { name: "下一个时间段" }));
+    const next = new Date(month + "-01T00:00:00Z"); next.setUTCMonth(next.getUTCMonth() + 1);
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("get_calendar_occurrences", expect.objectContaining({ fromDate: next.toISOString().slice(0,10), toDate: expect.any(String) })));
+    expect(screen.getByRole("region", { name: "DDL 月度总览" })).toBeInTheDocument();
   });
 });

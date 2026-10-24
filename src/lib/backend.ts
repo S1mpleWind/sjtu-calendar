@@ -40,6 +40,7 @@ export interface EventDraft {
   allDay: boolean;
   rrule: string | null;
   color: string;
+  includeInOverview: boolean;
 }
 
 export interface PersonalEvent extends EventDraft {
@@ -58,6 +59,7 @@ export interface RecurrenceOverride {
   timezone?: string | null;
   allDay?: boolean | null;
   color?: string | null;
+  includeInOverview?: boolean | null;
 }
 
 export interface CalendarOccurrence {
@@ -74,6 +76,8 @@ export interface CalendarOccurrence {
   displayTimezone: string;
   allDay: boolean;
   color: string;
+  includeInOverview: boolean;
+  overviewCompleted: boolean;
 }
 
 export function getBackendStatus(): Promise<BackendStatus> {
@@ -99,6 +103,9 @@ export const updatePersonalEvent = (id: string, event: EventDraft) =>
 
 export const deletePersonalEvent = (id: string) =>
   invoke<void>("delete_personal_event", { id });
+
+export const setPersonalEventCompleted = (eventId: string, originalStartLocal: string, completed: boolean) =>
+  invoke<void>("set_personal_event_completed", { eventId, originalStartLocal, completed });
 
 export const getPersonalEvent = (id: string) =>
   invoke<PersonalEvent | null>("get_personal_event", { id });

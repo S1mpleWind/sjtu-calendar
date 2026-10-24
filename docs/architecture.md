@@ -44,3 +44,9 @@ Successful backend writes broadcast `calendar-data-changed`; both windows reload
 Recurrence editing explicitly selects single or series scope before editing. Series scope loads the original event and retains its full RRULE. Range queries also inspect overridden identities whose original occurrence lies outside the requested dates. Day grouping spans every overlapping date with exclusive end boundaries, retaining the original occurrence identity for edits.
 
 Canvas caches are selected by an explicitly verified user ID, rather than the most recent sync timestamp. Replacing credentials invalidates that selection and rotates a revision; in-flight tests/syncs must match the revision before binding an account or applying data. Backup restore invalidates that binding because credentials are outside the database.
+
+## Monthly DDL overview (2026-10-24)
+
+The main window exposes a monthly overview through the sidebar. `DdlOverview.tsx` renders date circles and the selected day's actionable list; `lib/ddl-overview.ts` derives date/status values from real local-calendar and Canvas-cache queries. The monthly query covers the actual first through last day, including timezone conversion. It does not trigger network sync on navigation.
+
+Local completion commands validate the original occurrence, opt-in flag and cancellation state before persisting. Successful changes broadcast the existing cache-change event. Canvas uses its existing account-scoped completion command, and remotely submitted/graded items remain checked. No demo records are inserted into the application.

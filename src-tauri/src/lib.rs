@@ -113,6 +113,25 @@ fn delete_personal_event(
 }
 
 #[tauri::command]
+fn set_personal_event_completed(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    event_id: String,
+    original_start_local: String,
+    completed: bool,
+) -> Result<(), String> {
+    changed(
+        &app,
+        events::set_completion(
+            &state.database_path,
+            &event_id,
+            &original_start_local,
+            completed,
+        ),
+    )
+}
+
+#[tauri::command]
 fn get_personal_event(
     state: State<'_, AppState>,
     id: String,
@@ -377,6 +396,7 @@ pub fn run() {
             get_personal_event,
             list_personal_events,
             set_recurrence_exception,
+            set_personal_event_completed,
             get_calendar_occurrences,
             preview_ics_import,
             apply_ics_import,

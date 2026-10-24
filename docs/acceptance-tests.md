@@ -98,3 +98,10 @@
 - Rust: `cargo test` (23 passed); regression coverage includes moved recurrence lookup, preserving dates for title-only overrides, moving an instance back to the series start, explicit account selection, invalidating stale account requests, and resetting identity on restore.
 - UI regression coverage includes preserving original series dates/full RRULE, single-occurrence saves, overnight segmentation in week/month views, midnight exclusivity, DST date grouping, Widget data/timezone notifications, listener cleanup, and out-of-order cache reads.
 - Not rechecked manually: packaged dual-window notification delivery, native Widget rendering, and real Canvas/SJTU authentication. Fixture/API-command tests are not a claim of live account validation.
+
+## Monthly DDL overview — 2026-10-24
+
+- `pnpm lint`, `pnpm test` (29 passed), `pnpm build`, and `cargo test` (27 passed) completed successfully.
+- UI tests cover the sidebar entry, opt-in checkbox, monthly queries, gray empty days, red mixed-source days, yellow all-complete days, unchecking back to red, and reloading completion from backend state.
+- Rust tests cover migration v6→v7 with existing data, one-time inclusion of old local deadlines, independent recurrence completion, moves/cancellations, invalid completion requests, and backup/restore of overview state.
+- Native visual review is not claimed: Windows computer-use could not connect to its native pipe; browser inventory was empty. No account credentials or fabricated runtime sync records were used.

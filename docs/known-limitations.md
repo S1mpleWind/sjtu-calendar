@@ -2,6 +2,8 @@
 
 ## Current after Phase 4
 
+- The new monthly DDL overview has automated interaction/migration/backup coverage, but native visual acceptance remains outstanding: the Windows computer-use helper reports an unavailable native pipe, and no browser automation connection is present on this machine.
+
 - SJTU endpoints and response fields are `CONFIRMED_BY_SOURCE` only. No real SJTU account or live response has been verified. Follow the steps in `docs/integration-sjtu.md` before describing the connection as live-validated.
 - Saved SJTU cookies are read from an isolated login WebView and stored in Windows Credential Manager. The connection badge means only “session saved”; undergraduate session acceptance is checked by attempting the schedule request.
 - SJTU course payloads do not include academic term start dates. First-week dates are auto-filled only for terms verified from official notices and remain editable; other terms still need a date entered by the user.
