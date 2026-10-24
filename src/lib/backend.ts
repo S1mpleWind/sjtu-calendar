@@ -85,7 +85,7 @@ export const hideWidget = () => invoke<void>("hide_widget");
 export const setWidgetAlwaysOnTop = (enabled: boolean) =>
   invoke<void>("set_widget_always_on_top", { enabled });
 
-export const exportDataBackup = () => invoke<string>("export_data_backup");
+export const exportDataBackup = () => invoke<string | null>("export_data_backup");
 export const restoreDataBackup = (backupJson: string) =>
   invoke<number>("restore_data_backup", { backupJson });
 

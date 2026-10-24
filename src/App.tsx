@@ -500,14 +500,8 @@ function BackupSettings({ onRestored }: { onRestored: () => Promise<void> }) {
   async function exportBackup() {
     setWorking(true); setProblem(""); setMessage("");
     try {
-      const payload = await exportDataBackup();
-      const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `sjtu-schedule-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
-      setMessage("备份已生成，请在浏览器下载位置确认文件已保存。");
+      const savedPath = await exportDataBackup();
+      if (savedPath) setMessage(`备份已保存到：${savedPath}`);
     } catch (reason) { setProblem(reason instanceof Error ? reason.message : "导出备份失败"); }
     finally { setWorking(false); }
   }
@@ -524,6 +518,7 @@ function BackupSettings({ onRestored }: { onRestored: () => Promise<void> }) {
   }
   return <section className="settings-panel backup-settings"><div className="settings-title"><div className="settings-icon">DB</div><div><h2>数据备份与恢复</h2><p>备份本地日程和同步缓存；Credential Manager 中的外部账户凭据不包含在内。</p></div></div>
     <div className="settings-actions"><button className="save-button" disabled={working} onClick={() => void exportBackup()} type="button">导出数据库备份</button></div>
+    <p className="settings-help">选择备份的保存位置，默认打开 Downloads（下载）文件夹。</p>
     <label className="form-field"><span>从备份恢复</span><input type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; setFileName(file?.name ?? ""); setProblem(""); setMessage(""); void file?.text().then(setBackupJson).catch(() => setProblem("无法读取备份文件")); }} /></label>
     {fileName && <p className="settings-help">已选择：{fileName}</p>}
     <button className="cancel-button" disabled={working || !backupJson} onClick={() => void restoreBackup()} type="button">验证并恢复备份</button>

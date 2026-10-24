@@ -1,6 +1,6 @@
 [package]
 name = "sjtu-schedule"
-version = "1.1.1"
+version = "1.1.2"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2024"
@@ -32,6 +32,7 @@ regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 keyring = { version = "4.2", features = ["v1"] }
 tauri-plugin-window-state = "2"
+tauri-plugin-dialog = "2"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

@@ -8,6 +8,7 @@ mod widget;
 use serde::Serialize;
 use std::{fs, path::PathBuf};
 use tauri::{Emitter, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 
 struct AppState {
     database_path: PathBuf,
@@ -70,8 +71,44 @@ fn get_backend_status(state: State<'_, AppState>) -> Result<BackendStatus, Strin
 }
 
 #[tauri::command]
-fn export_data_backup(state: State<'_, AppState>) -> Result<String, String> {
-    backup::export(&state.database_path)
+async fn export_data_backup(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let database_path = state.database_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let downloads = app
+            .path()
+            .download_dir()
+            .map_err(|_| "无法定位 Downloads 文件夹".to_string())?;
+        let mut dialog = app
+            .dialog()
+            .file()
+            .set_title("导出数据库备份")
+            .set_directory(downloads)
+            .set_file_name(format!(
+                "sjtu-schedule-backup-{}.json",
+                chrono::Local::now().format("%Y-%m-%d")
+            ))
+            .add_filter("JSON 备份", &["json"]);
+        if let Some(window) = app.get_webview_window("main") {
+            dialog = dialog.set_parent(&window);
+        }
+        let Some(destination) = dialog.blocking_save_file() else {
+            return Ok(None);
+        };
+        let destination = destination
+            .into_path()
+            .map_err(|_| "所选保存路径无效".to_string())?;
+        if destination == database_path {
+            return Err("备份不能覆盖正在使用的数据库".into());
+        }
+        let payload = backup::export(&database_path)?;
+        fs::write(&destination, payload).map_err(|error| format!("无法保存备份：{error}"))?;
+        Ok(Some(destination.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|_| "导出备份任务未完成".to_string())?
 }
 
 #[tauri::command]
@@ -329,6 +366,7 @@ fn set_sjtu_occurrence_note(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let database_directory = app.path().app_data_dir()?;
             fs::create_dir_all(&database_directory)?;
