@@ -17,7 +17,7 @@ import { buildOverviewItems, type OverviewItem } from "./lib/ddl-overview";
 import { canvasCompleted, canvasRemotelyCompleted, canvasSubmissionLabel } from "./lib/canvas-status";
 
 type View = "week" | "month" | "overview";
-type EditorState = { event?: PersonalEvent; occurrence?: CalendarOccurrence; date: string; startTime?: string };
+type EditorState = { event?: PersonalEvent; occurrence?: CalendarOccurrence; date: string; startTime?: string; includeInOverview?: boolean };
 const ZONES = ["Asia/Shanghai", "Asia/Tokyo", "America/New_York", "Europe/London", "UTC"];
 const FIRST_HOUR = 7;
 const LAST_HOUR = 23;
@@ -143,6 +143,7 @@ function App() {
   const [selectedCanvasDeadline, setSelectedCanvasDeadline] = useState<CanvasDeadline | null>(null);
   const [status, setStatus] = useState<BackendStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [eventWorking, setEventWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<"calendar" | "settings">("calendar");
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -235,7 +236,7 @@ function App() {
     setSelectedDate(date);
     setMiniMonth(date);
   }
-  function openNew(date = selectedDate, startTime?: string) { setEditor({ date, startTime }); }
+  function openNew(date = selectedDate, startTime?: string) { setEditor({ date, startTime, includeInOverview: view === "overview" }); }
   async function openItem(item: CalendarOccurrence) {
     try {
       const event = await getPersonalEvent(item.eventId);
@@ -244,7 +245,7 @@ function App() {
   }
   async function saveItem(draft: EventDraft, scope: "series" | "single") {
     if (!editor) return;
-    setBusy(true);
+    setEventWorking(true);
     setError(null);
     try {
       if (editor.occurrence && editor.event?.rrule && scope === "single") {
@@ -260,12 +261,11 @@ function App() {
       else await createPersonalEvent(draft);
       setEditor(null);
       await refresh();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败，请检查日程信息。"); }
-    finally { setBusy(false); }
+    } finally { setEventWorking(false); }
   }
   async function removeItem(scope: "series" | "single") {
     if (!editor?.event) return;
-    setBusy(true);
+    setEventWorking(true);
     setError(null);
     try {
       if (editor.occurrence && editor.event.rrule && scope === "single") {
@@ -273,8 +273,7 @@ function App() {
       } else await deletePersonalEvent(editor.event.id);
       setEditor(null);
       await refresh();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "删除失败"); }
-    finally { setBusy(false); }
+    } finally { setEventWorking(false); }
   }
 
   async function markCanvasDeadline(item: CanvasDeadline, completed: boolean) {
@@ -362,7 +361,7 @@ function App() {
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
       if (event.key.toLowerCase() === "n") {
-        event.preventDefault(); setPage("calendar"); setEditor({ date: selectedDate });
+        event.preventDefault(); setPage("calendar"); setEditor({ date: selectedDate, includeInOverview: view === "overview" });
       } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
         const offset = event.key === "ArrowLeft" ? -1 : 1;
@@ -425,7 +424,7 @@ function App() {
         <footer className="calendar-footer"><span><i className="online-dot" />数据保存在此设备</span><span>{busy ? "正在读取本地日程…" : `${occurrences.length} 个日程实例`}</span></footer>
       </>}
     </section>
-    {editor && <EventEditor key={`${editor.event?.id ?? "new"}-${editor.occurrence?.occurrenceId ?? editor.date}`} editor={editor} timezone={timezone} busy={busy} onClose={() => setEditor(null)} onSave={saveItem} onDelete={removeItem} />}
+    {editor && <EventEditor key={`${editor.event?.id ?? "new"}-${editor.occurrence?.occurrenceId ?? editor.date}`} editor={editor} timezone={timezone} busy={eventWorking} onClose={() => setEditor(null)} onSave={saveItem} onDelete={removeItem} />}
     {selectedCourse && <CourseDetails course={selectedCourse} onSaveNote={saveCourseOccurrenceNote} onClose={() => setSelectedCourse(null)} />}
     {selectedCanvasDeadline && <CanvasAssignmentDetails deadline={selectedCanvasDeadline} timezone={timezone} onClose={() => setSelectedCanvasDeadline(null)} />}
   </main>;
@@ -614,7 +613,7 @@ function EventEditor(props: EventEditorProps) {
   return <EventEditorForm key={scope} {...props} scope={scope} onScopeChange={setScope} />;
 }
 
-function EventEditorForm({ editor, timezone, busy, onClose, onSave, onDelete, scope, onScopeChange }: EventEditorProps & { scope: "single" | "series"; onScopeChange: (scope: "single" | "series") => void }) {
+function EventEditorForm({ editor, timezone, busy: backendBusy, onClose, onSave, onDelete, scope, onScopeChange }: EventEditorProps & { scope: "single" | "series"; onScopeChange: (scope: "single" | "series") => void }) {
   const initial = scope === "single" && editor.event && editor.occurrence ? {
     ...editor.event,
     title: editor.occurrence.title,
@@ -627,7 +626,7 @@ function EventEditorForm({ editor, timezone, busy, onClose, onSave, onDelete, sc
     allDay: editor.occurrence.allDay,
     color: editor.occurrence.color,
     includeInOverview: editor.occurrence.includeInOverview,
-  } : editor.event ?? emptyDraft(editor.date, timezone, editor.startTime);
+  } : editor.event ?? { ...emptyDraft(editor.date, timezone, editor.startTime), includeInOverview: editor.includeInOverview ?? false };
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description);
   const [location, setLocation] = useState(initial.location);
@@ -639,24 +638,49 @@ function EventEditorForm({ editor, timezone, busy, onClose, onSave, onDelete, sc
   const [includeInOverview, setIncludeInOverview] = useState(initial.includeInOverview ?? initial.category === "deadline");
   const [repeat, setRepeat] = useState(initial.rrule ?? "");
   const [color, setColor] = useState(initial.color);
+  const [submitError, setSubmitError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
   const recurringOccurrence = !!editor.occurrence && !!editor.event?.rrule;
   const draft: EventDraft = {
     title, description, location, category, startLocal: localValue(start), endLocal: localValue(end), timezone: eventZone,
     allDay, rrule: repeat || null, color, includeInOverview,
   };
-  function submit(event: FormEvent, scope: "series" | "single") { event.preventDefault(); void onSave(draft, scope); }
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><form className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title" onSubmit={(event) => submit(event, scope)}>
-    <header className="modal-header"><div><p className="eyebrow">{editor.event ? "编辑本地日程" : "添加到个人日历"}</p><h2 id="event-modal-title">{editor.event ? "日程详情" : "新建日程"}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header>
+  function changeStart(value: string) {
+    if (value && end && value >= end) {
+      const duration = Math.max(60_000, Date.parse(end + "Z") - Date.parse(start + "Z")) || 3_600_000;
+      const nextEnd = new Date(Date.parse(value + "Z") + duration);
+      if (Number.isFinite(nextEnd.getTime())) setEnd(nextEnd.toISOString().slice(0, 16));
+    }
+    setStart(value); setSubmitError("");
+  }
+  async function run(action: () => Promise<void>) {
+    if (submitLock.current) return;
+    submitLock.current = true; setSubmitting(true); setSubmitError("");
+    try { await action(); }
+    catch (reason) { setSubmitError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { submitLock.current = false; setSubmitting(false); }
+  }
+  function submit(event: FormEvent, scope: "series" | "single") {
+    event.preventDefault();
+    if (!title.trim()) { setSubmitError("请输入日程标题"); return; }
+    if (!start || !end || end <= start) { setSubmitError("结束时间必须晚于开始时间，请检查日期和时间。"); return; }
+    void run(() => onSave({ ...draft, title: title.trim() }, scope));
+  }
+  const busy = backendBusy || submitting;
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (!busy && event.target === event.currentTarget) onClose(); }}><form className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title" onSubmit={(event) => submit(event, scope)}>
+    <header className="modal-header"><div><p className="eyebrow">{editor.event ? "编辑本地日程" : "添加到个人日历"}</p><h2 id="event-modal-title">{editor.event ? "日程详情" : "新建日程"}</h2></div><button type="button" disabled={busy} aria-label="关闭" onClick={onClose}>×</button></header>
     <div className="form-scroll">{recurringOccurrence && <label className="form-field"><span>编辑范围（切换后重新载入对应日程）</span><select aria-label="编辑范围" value={scope} disabled={busy} onChange={(event) => onScopeChange(event.target.value as "single" | "series")}><option value="single">仅本次</option><option value="series">整个系列</option></select></label>}<label className="form-field"><span>标题</span><input autoFocus required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：项目讨论" /></label>
       <div className="form-two"><label className="form-field"><span>类型</span><select value={category} onChange={(event) => { const value = event.target.value as EventDraft["category"]; setCategory(value); if (value === "deadline") setIncludeInOverview(true); }}><option value="event">日程</option><option value="deadline">截止事项</option></select></label><label className="form-field"><span>重复</span><select value={repeat} disabled={recurringOccurrence && scope === "single"} onChange={(event) => setRepeat(event.target.value)}><option value="">不重复</option><option value="FREQ=DAILY">每天</option><option value="FREQ=WEEKLY">每周</option><option value="FREQ=WEEKLY;INTERVAL=2">每两周</option>{repeat && !["FREQ=DAILY", "FREQ=WEEKLY", "FREQ=WEEKLY;INTERVAL=2"].includes(repeat) && <option value={repeat}>自定义规则（保留）</option>}</select></label></div>
-      <div className="form-two"><label className="form-field"><span>开始</span><input required type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} /></label><label className="form-field"><span>结束</span><input required type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
+      <div className="form-two"><label className="form-field"><span>开始</span><input required type="datetime-local" value={start} onChange={(event) => changeStart(event.target.value)} /></label><label className="form-field"><span>结束</span><input required type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
       <div className="form-two"><label className="form-field"><span>时区</span><select value={eventZone} onChange={(event) => setEventZone(event.target.value)}>{ZONES.map((zone) => <option value={zone} key={zone}>{zone}</option>)}</select></label><label className="form-field color-field"><span>颜色</span><input type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label></div>
       <label className="check-field"><input type="checkbox" checked={allDay} onChange={(event) => setAllDay(event.target.checked)} />全天事件</label>
       <label className="check-field"><input type="checkbox" checked={includeInOverview} onChange={(event) => setIncludeInOverview(event.target.checked)} />纳入 DDL 总览（按开始日期统计）</label>
       <label className="form-field"><span>地点</span><input maxLength={200} value={location} onChange={(event) => setLocation(event.target.value)} placeholder="添加地点" /></label>
       <label className="form-field"><span>备注</span><textarea rows={3} maxLength={4000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="添加说明" /></label>
+      {submitError && <div className="error-banner" role="alert">{submitError}</div>}
     </div>
-    <footer className="modal-actions"><div>{editor.event && <button className="delete-button" disabled={busy} onClick={() => void onDelete(scope)} type="button">{recurringOccurrence ? scope === "single" ? "仅删除此项" : "删除整个系列" : "删除日程"}</button>}</div><div><button className="cancel-button" onClick={onClose} type="button">取消</button><button className="save-button" disabled={busy} type="submit">{recurringOccurrence ? scope === "single" ? "保存此项" : "保存整个系列" : "保存"}</button></div></footer>
+    <footer className="modal-actions"><div>{editor.event && <button className="delete-button" disabled={busy} onClick={() => void run(() => onDelete(scope))} type="button">{recurringOccurrence ? scope === "single" ? "仅删除此项" : "删除整个系列" : "删除日程"}</button>}</div><div><button className="cancel-button" disabled={busy} onClick={onClose} type="button">取消</button><button className="save-button" disabled={busy} type="submit">{busy ? "处理中…" : recurringOccurrence ? scope === "single" ? "保存此项" : "保存整个系列" : "保存"}</button></div></footer>
   </form></div>;
 }
 

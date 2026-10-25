@@ -1,7 +1,7 @@
 use rusqlite::{Connection, OptionalExtension, params};
 use std::path::Path;
 
-pub const LATEST_SCHEMA: i64 = 8;
+pub const LATEST_SCHEMA: i64 = 9;
 
 const INITIAL_MIGRATION: &str = include_str!("../migrations/0001_initial.sql");
 const PERSONAL_EVENTS_MIGRATION: &str = include_str!("../migrations/0002_personal_events.sql");
@@ -12,6 +12,7 @@ const SJTU_OCCURRENCE_NOTES_MIGRATION: &str =
     include_str!("../migrations/0006_sjtu_occurrence_notes.sql");
 const DDL_OVERVIEW_MIGRATION: &str = include_str!("../migrations/0007_ddl_overview.sql");
 const LONG_TERM_MIGRATION: &str = include_str!("../migrations/0008_long_term_items.sql");
+const LONG_TERM_NOTES_MIGRATION: &str = include_str!("../migrations/0009_long_term_notes.sql");
 
 pub fn initialize_database(path: &Path) -> rusqlite::Result<i64> {
     let mut connection = Connection::open(path)?;
@@ -37,6 +38,7 @@ pub(super) fn apply_migrations(connection: &mut Connection) -> rusqlite::Result<
         (6, SJTU_OCCURRENCE_NOTES_MIGRATION),
         (7, DDL_OVERVIEW_MIGRATION),
         (8, LONG_TERM_MIGRATION),
+        (9, LONG_TERM_NOTES_MIGRATION),
     ] {
         let applied = connection
             .query_row(

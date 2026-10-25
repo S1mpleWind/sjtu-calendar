@@ -9,12 +9,13 @@ pub struct LongTermItem {
     title: String,
     created_at: String,
     archived_at: Option<String>,
+    note: String,
 }
 
 pub fn list(path: &Path) -> Result<Vec<LongTermItem>, String> {
     let connection = Connection::open(path).map_err(db_error)?;
     let mut statement = connection.prepare(
-        "SELECT id,title,created_at,archived_at FROM long_term_items ORDER BY (archived_at IS NOT NULL),CASE WHEN archived_at IS NULL THEN created_at END,archived_at DESC,id",
+        "SELECT id,title,created_at,archived_at,note FROM long_term_items ORDER BY (archived_at IS NOT NULL),CASE WHEN archived_at IS NULL THEN created_at END,archived_at DESC,id",
     ).map_err(db_error)?;
     statement
         .query_map([], |row| {
@@ -23,6 +24,7 @@ pub fn list(path: &Path) -> Result<Vec<LongTermItem>, String> {
                 title: row.get(1)?,
                 created_at: row.get(2)?,
                 archived_at: row.get(3)?,
+                note: row.get(4)?,
             })
         })
         .map_err(db_error)?
@@ -30,22 +32,43 @@ pub fn list(path: &Path) -> Result<Vec<LongTermItem>, String> {
         .map_err(db_error)
 }
 
-pub fn create(path: &Path, title: &str) -> Result<(), String> {
+pub fn create(path: &Path, title: &str, note: &str) -> Result<(), String> {
     let title = title.trim();
     if title.is_empty() || title.chars().count() > 200 {
         return Err("请输入 1–200 字的清单内容".into());
     }
+    if note.chars().count() > 4000 {
+        return Err("备注不能超过 4000 字".into());
+    }
     Connection::open(path)
         .map_err(db_error)?
         .execute(
-            "INSERT INTO long_term_items(id,title,created_at) VALUES(?1,?2,?3)",
+            "INSERT INTO long_term_items(id,title,created_at,note) VALUES(?1,?2,?3,?4)",
             params![
                 uuid::Uuid::new_v4().to_string(),
                 title,
-                chrono::Utc::now().to_rfc3339()
+                chrono::Utc::now().to_rfc3339(),
+                note
             ],
         )
         .map_err(db_error)?;
+    Ok(())
+}
+
+pub fn update_note(path: &Path, id: &str, note: &str) -> Result<(), String> {
+    if note.chars().count() > 4000 {
+        return Err("备注不能超过 4000 字".into());
+    }
+    let changed = Connection::open(path)
+        .map_err(db_error)?
+        .execute(
+            "UPDATE long_term_items SET note=?1 WHERE id=?2",
+            params![note, id],
+        )
+        .map_err(db_error)?;
+    if changed == 0 {
+        return Err("该清单项目已不存在，请刷新后重试".into());
+    }
     Ok(())
 }
 

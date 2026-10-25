@@ -196,3 +196,10 @@
 - Implementation commit: `a56455e62db4358fe6c26a50210ca882a20d8d5b`. `pnpm tauri build` passed.
 - Local NSIS package: `src-tauri/target/release/bundle/nsis/SJTU.Schedule_1.1.0_canvas-fix_a56455e_x64-setup.exe`, 3587884 bytes; SHA-256 `006A19A36ACDBEB395C768E0D022CF0326B936235849653B944A8C9DC2136AA3`.
 - The extra filename identifies this local fix separately from the published v1.1.0 artifact. No remote release was changed by this follow-up fix.
+
+## DDL event creation feedback and long-term notes — 2026-10-25
+
+- Source inspection found that overview-created personal events defaulted to exclusion from the overview; successful writes could therefore look like a failed addition. Save/delete errors were shown behind the modal and Rust string errors were replaced with generic text. These defects are fixed, but they do not establish every cause of the user's intermittent report.
+- Creation from overview (including Ctrl+N) now opts in by default. Editor mutations have their own pending state and synchronous submission lock; background reads no longer disable the save button or clear the modal's error. Save/delete failures retain input and show the actual error in the dialog. Moving the start beyond the end adjusts the end while preserving the prior duration; invalid ordering is explained before submission.
+- Schema v9 adds long-term item notes with an empty default for existing rows. Notes may be entered during creation or edited on active/archived items, remain through archive/restore, and are included in SQLite backups. API validation limits notes to 4000 characters.
+- Verification: `pnpm lint`, `pnpm build`, `cargo fmt`, `cargo check`, and `git diff --check` passed. No test suite or native UI interaction was run for this change. No release was published.

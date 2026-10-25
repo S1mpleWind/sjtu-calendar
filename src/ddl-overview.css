@@ -8,7 +8,14 @@
 .long-term-header { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
 .long-term-header h3 { font-size: 13px; }
 .long-term-archive { flex-shrink: 0; border: 1px solid #dce5dd; border-radius: 7px; padding: 5px 7px; color: #34785c; background: #f7faf7; cursor: pointer; font-size: 10px; }
-.long-term-add { display: flex; gap: 6px; margin-top: 12px; }
+.long-term-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-top: 12px; }
+.long-term-add details { grid-column: 1 / -1; color: #718275; font-size: 11px; }
+.long-term-add summary { padding: 5px 0; cursor: pointer; }
+.long-term-checklist textarea { box-sizing: border-box; width: 100%; padding: 8px; border: 1px solid #dce5dd; border-radius: 7px; resize: vertical; font: inherit; font-size: 11px; color: #394e40; }
+.long-term-checklist .long-term-note { display: block; white-space: pre-wrap; font-size: 11px; line-height: 1.6; }
+.long-term-edit-note { padding: 4px 0; border: 0; background: none; color: #34785c; font-size: 10px; cursor: pointer; }
+.long-term-note-editor { margin-top: 9px; }
+.long-term-note-editor button { padding: 5px 7px; margin: 5px 5px 0 0; border: 1px solid #dce5dd; border-radius: 6px; background: #f7faf7; color: #34785c; font-size: 10px; cursor: pointer; }
 .long-term-add input { min-width: 0; flex: 1; width: 100%; border: 1px solid #dce5dd; border-radius: 7px; padding: 8px; color: #394e40; background: #fff; font: inherit; font-size: 11px; }
 .long-term-add button { border: 0; border-radius: 7px; padding: 6px 9px; background: #34785c; color: #fff; font-size: 11px; cursor: pointer; }
 .long-term-checklist button:disabled, .long-term-checklist input:disabled { opacity: .55; cursor: default; }

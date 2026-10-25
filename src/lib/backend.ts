@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export interface LongTermItem { id: string; title: string; createdAt: string; archivedAt: string | null }
+export interface LongTermItem { id: string; title: string; createdAt: string; archivedAt: string | null; note: string }
 export const listLongTermItems = () => invoke<LongTermItem[]>("list_long_term_items");
-export const createLongTermItem = (title: string) => invoke<void>("create_long_term_item", { title });
+export const createLongTermItem = (title: string, note = "") => invoke<void>("create_long_term_item", { title, note });
+export const updateLongTermItemNote = (id: string, note: string) => invoke<void>("update_long_term_item_note", { id, note });
 export const setLongTermItemArchived = (id: string, archived: boolean) => invoke<void>("set_long_term_item_archived", { id, archived });
 
 export interface BackendStatus {

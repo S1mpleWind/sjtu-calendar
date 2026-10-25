@@ -42,8 +42,25 @@ fn create_long_term_item(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     title: String,
+    note: Option<String>,
 ) -> Result<(), String> {
-    changed(&app, long_term::create(&state.database_path, &title))
+    changed(
+        &app,
+        long_term::create(&state.database_path, &title, note.as_deref().unwrap_or("")),
+    )
+}
+
+#[tauri::command]
+fn update_long_term_item_note(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    note: String,
+) -> Result<(), String> {
+    changed(
+        &app,
+        long_term::update_note(&state.database_path, &id, &note),
+    )
 }
 
 #[tauri::command]
@@ -424,6 +441,7 @@ pub fn run() {
             get_backend_status,
             list_long_term_items,
             create_long_term_item,
+            update_long_term_item_note,
             set_long_term_item_archived,
             export_data_backup,
             restore_data_backup,

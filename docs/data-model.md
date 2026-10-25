@@ -2,6 +2,8 @@
 
 ## Long-term checklist (schema v8)
 
+Schema v9 adds `long_term_items.note` as non-null text with an empty default for existing items. Creation and note updates validate a 4,000-character limit. Archiving/restoring preserves notes; SQLite backups include them.
+
 `long_term_items` stores manually entered, undated items with UUID `id`, trimmed `title` (1–200 characters), UTC `created_at` and nullable UTC `archived_at`. Checking an item sets its archive timestamp; unchecking it restores it to the active list. Items are independent of the selected calendar date/month and do not affect DDL circle colors. Schema v8 creates the table without modifying existing events or assignments. The existing SQLite backup/restore path includes this table and migrates older backups on restore.
 
 Phase 0 仅创建 `app_settings(key, value_json, updated_at)` 并以 `schema_migrations(version, applied_at)` 管理升级。初始设置保存 `Asia/Shanghai` 时区默认值，JSON 内容作为值而非 SQL 文本格式保存。
