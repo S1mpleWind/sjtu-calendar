@@ -211,3 +211,9 @@
 - Reads on opening/focus, successful mutations, and a one-minute interval keep an open weekly page current across a week boundary. Existing history survives restarts and SQLite backup/restore. No runtime demo data is used.
 - Verification: pnpm lint, pnpm build, cargo fmt, cargo check and git diff --check passed. No tests were added or run; native interactive acceptance and a real clock transition were not exercised. No installer or remote release was changed in this task.
 - API references consulted: https://docs.rs/rusqlite/latest/rusqlite/enum.TransactionBehavior.html and https://docs.rs/chrono/latest/chrono/trait.Datelike.html; compilation used the project's locked dependencies.
+
+### Weekly Todo interaction adjustment — 2026-11-25
+
+- Single-clicking a task title expands/collapses its detail area without repeating title/details field labels. Double-clicking edits the title in place; Enter/blur saves, Escape cancels, and F2 provides keyboard access.
+- Double-click cancels the pending single-click action/restores the prior expanded state. Title saves are guarded against duplicate Enter/blur requests and preserve any unsaved details draft. Details save separately.
+- Verification: pnpm lint, pnpm build and git diff --check passed. Native mouse/keyboard acceptance and automated tests were not run; no remote release was changed.

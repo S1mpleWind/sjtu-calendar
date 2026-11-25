@@ -16,29 +16,58 @@ function TodoRow({ item, working, onSave }: { item: WeeklyTodo; working: boolean
   const [title, setTitle] = useState(item.title);
   const [details, setDetails] = useState(item.details);
   const [message, setMessage] = useState("");
-  const changed = title !== item.title || details !== item.details;
-  function toggle() {
-    if (!expanded) { setTitle(item.title); setDetails(item.details); setMessage(""); }
-    setExpanded(!expanded);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const clickTimer = useRef<number | undefined>(undefined);
+  const beforeClick = useRef(false);
+  const titleSaveLock = useRef(false);
+  const cancelledTitle = useRef(false);
+  const changed = details !== item.details;
+  useEffect(() => () => window.clearTimeout(clickTimer.current), []);
+  function clickTitle(clicks: number) {
+    if (clicks > 1) return;
+    beforeClick.current = expanded;
+    window.clearTimeout(clickTimer.current);
+    clickTimer.current = window.setTimeout(() => setExpanded((value) => !value), 250);
+  }
+  function editTitle() {
+    window.clearTimeout(clickTimer.current);
+    setExpanded(beforeClick.current);
+    cancelledTitle.current = false;
+    setTitle(item.title); setEditingTitle(true); setMessage("");
+  }
+  async function saveTitle() {
+    if (cancelledTitle.current || titleSaveLock.current) return;
+    const next = title.trim();
+    if (!next) { setMessage("标题不能为空"); return; }
+    if (next === item.title) { setEditingTitle(false); return; }
+    titleSaveLock.current = true;
+    try {
+      if (await onSave({ ...item, title: next })) { setEditingTitle(false); setMessage(""); }
+      else setMessage("标题保存失败，请重试。");
+    } finally { titleSaveLock.current = false; }
   }
   async function submit(event: FormEvent) {
     event.preventDefault(); setMessage("");
-    const saved = await onSave({ ...item, title: title.trim(), details });
-    if (saved) { setTitle(title.trim()); setMessage("已保存"); }
+    const saved = await onSave({ ...item, details });
+    if (saved) setMessage("已保存");
     else setMessage("保存失败，内容已保留，请重试。");
   }
   return <li className={`weekly-todo ${item.completed ? "is-complete" : ""}`}>
     <div className="weekly-todo-line">
       <input type="checkbox" checked={item.completed} disabled={working} aria-label={`完成每周任务 ${item.title}`} onChange={(event) => void onSave({ ...item, completed: event.target.checked })} />
-      <button className="weekly-todo-toggle" type="button" aria-expanded={expanded} onClick={toggle}><span>{item.title}</span><span aria-hidden="true">{expanded ? "⌃" : "⌄"}</span></button>
+      {editingTitle ? <input className="weekly-inline-title" aria-label={`修改 ${item.title} 的标题`} maxLength={200} autoFocus value={title} disabled={working} onFocus={(event) => event.target.select()} onChange={(event) => setTitle(event.target.value)} onBlur={() => void saveTitle()} onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) return;
+        if (event.key === "Enter") { event.preventDefault(); void saveTitle(); }
+        if (event.key === "Escape") { cancelledTitle.current = true; setEditingTitle(false); setMessage(""); }
+      }} /> : <button className="weekly-todo-toggle" type="button" aria-expanded={expanded} title="单击展开详情，双击修改标题" onClick={(event) => clickTitle(event.detail)} onDoubleClick={editTitle} onKeyDown={(event) => { if (event.key === "F2") { event.preventDefault(); beforeClick.current = expanded; editTitle(); } }}><span>{item.title}</span><span aria-hidden="true">{expanded ? "⌃" : "⌄"}</span></button>}
     </div>
     {item.carriedFromWeek && <p className="weekly-carried">从 {item.carriedFromWeek} 那周延续</p>}
     {!expanded && item.details && <p className="weekly-details-preview">{item.details}</p>}
     {expanded && <form className="weekly-editor" onSubmit={(event) => void submit(event)}>
-      <label>任务标题<input aria-label={`${item.title}的标题`} maxLength={200} required value={title} disabled={working} onChange={(event) => { setTitle(event.target.value); setMessage(""); }} /></label>
-      <label>详细内容<textarea aria-label={`${item.title}的详细内容`} rows={5} maxLength={10000} value={details} disabled={working} placeholder="填写步骤、备注或相关链接" onChange={(event) => { setDetails(event.target.value); setMessage(""); }} /></label>
-      <div className="weekly-editor-actions"><button type="submit" disabled={working || !title.trim() || !changed}>保存</button><button className="secondary" type="button" disabled={working} onClick={() => { setTitle(item.title); setDetails(item.details); setExpanded(false); }}>取消</button><span role="status">{message || (changed ? "有未保存的修改" : "")}</span></div>
+      <textarea aria-label={`${item.title}的详细内容`} rows={5} maxLength={10000} value={details} disabled={working} placeholder="填写步骤、备注或相关链接" onChange={(event) => { setDetails(event.target.value); setMessage(""); }} />
+      <div className="weekly-editor-actions"><button type="submit" disabled={working || !changed}>保存</button><button className="secondary" type="button" disabled={working} onClick={() => { setDetails(item.details); setExpanded(false); }}>取消</button><span>{changed ? "有未保存的修改" : ""}</span></div>
     </form>}
+    {message && <p className="weekly-item-message" role="status">{message}</p>}
   </li>;
 }
 
@@ -92,7 +121,7 @@ export default function WeeklyTodos({ timezone }: { timezone: string }) {
   }
 
   return <section className="weekly-todos-page" aria-label="每周 Todo">
-    <div className="weekly-intro"><p>每周一开始新的一周，自动延续上周未完成的任务。点击任务可展开编辑详细内容。</p><span>{timezone}</span></div>
+    <div className="weekly-intro"><p>未完成任务每周自动延续。单击标题展开详情，双击修改标题。</p><span>{timezone}</span></div>
     {error && <div className="error-banner" role="alert">{error}<button type="button" onClick={() => void refresh()}>重试</button></div>}
     {!data && !error && <p role="status">正在读取每周 Todo…</p>}
     {data?.weeks.map((week) => {

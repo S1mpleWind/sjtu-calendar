@@ -14,6 +14,8 @@
 .weekly-todo-line { display: flex; align-items: flex-start; gap: 12px; }.weekly-todo-line > input { flex-shrink: 0; accent-color: #34785c; margin: 3px 0 0; width: 15px; height: 15px; }
 .weekly-todo-toggle { display: flex; flex: 1; min-width: 0; justify-content: space-between; text-align: left; gap: 15px; padding: 0; border: 0; background: none; color: #344a3a; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .weekly-todo-toggle > span:last-child { color: #8f9e92; }.weekly-todo.is-complete .weekly-todo-toggle > span:first-child { color: #95a196; text-decoration: line-through; }
+.weekly-todo-line > .weekly-inline-title { flex: 1; min-width: 0; width: auto; height: auto; margin: -5px 0 0; padding: 5px 8px; border: 1px solid #b7d2bf; border-radius: 5px; color: #344a3a; background: #fcfdfb; font-size: 13px; }
+.weekly-item-message { margin: 9px 0 0 27px; color: #758278; font-size: 11px; }
 .weekly-carried { margin: 5px 0 0 27px; color: #8b998e; font-size: 10px; }
 .weekly-details-preview { margin: 8px 0 0 27px; color: #87928a; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .weekly-editor { display: flex; flex-direction: column; gap: 13px; margin: 16px 0 0 27px; max-width: 760px; }.weekly-editor label { display: flex; flex-direction: column; gap: 7px; color: #738376; font-size: 11px; }
