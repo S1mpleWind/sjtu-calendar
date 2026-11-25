@@ -13,6 +13,7 @@ import "./App.css";
 import { dayMinutes, groupByDay } from "./lib/calendar-days";
 import { useCalendarUpdates } from "./lib/calendar-updates";
 import DdlOverview from "./DdlOverview";
+import WeeklyTodos from "./WeeklyTodos";
 import { buildOverviewItems, type OverviewItem } from "./lib/ddl-overview";
 import { canvasCompleted, canvasRemotelyCompleted, canvasSubmissionLabel } from "./lib/canvas-status";
 
@@ -145,7 +146,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [eventWorking, setEventWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState<"calendar" | "settings">("calendar");
+  const [page, setPage] = useState<"calendar" | "settings" | "weekly">("calendar");
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [overviewWorking, setOverviewWorking] = useState(false);
   const refreshSequence = useRef(0);
@@ -387,6 +388,7 @@ function App() {
       <nav className="side-nav" aria-label="主导航">
         <button className={page === "calendar" && view !== "overview" ? "side-link active" : "side-link"} onClick={() => { setPage("calendar"); if (view === "overview") setView("week"); }} type="button"><span>▦</span>日历</button>
         <button className={page === "calendar" && view === "overview" ? "side-link active" : "side-link"} onClick={() => { const currentDate = todayInZone(timezone); setSelectedDate(currentDate); setMiniMonth(currentDate); setPage("calendar"); setView("overview"); }} type="button"><span aria-hidden="true">◉</span>DDL 总览</button>
+        <button className={page === "weekly" ? "side-link active" : "side-link"} onClick={() => setPage("weekly")} type="button"><span aria-hidden="true">☑</span>每周 Todo</button>
         <button className={page === "settings" ? "side-link active" : "side-link"} onClick={() => setPage("settings")} type="button"><span>⚙</span>设置</button>
       </nav>
       <section className="mini-calendar" aria-label="迷你日历">
@@ -407,7 +409,7 @@ function App() {
 
     <section className="main-area">
       <header className="topbar">
-        <div className="heading"><p className="eyebrow">{page === "calendar" ? "你的安排，一目了然" : "本地偏好设置"}</p><h1>{page === "calendar" ? view === "overview" ? "DDL 总览" : "日历" : "设置"}</h1></div>
+        <div className="heading"><p className="eyebrow">{page === "weekly" ? "按周管理任务" : page === "calendar" ? "你的安排，一目了然" : "本地偏好设置"}</p><h1>{page === "weekly" ? "每周 Todo" : page === "calendar" ? view === "overview" ? "DDL 总览" : "日历" : "设置"}</h1></div>
         {page === "calendar" ? <>
           <div className={`date-nav ${view === "overview" ? "overview-date-nav" : ""}`}><button aria-label={view === "overview" ? "DDL 上个月" : "上一个时间段"} title={view === "overview" ? "上个月" : undefined} onClick={() => navigate(-1)} type="button">{view === "overview" ? "‹ 上月" : "‹"}</button><button className="today-button" onClick={() => { const currentDate = todayInZone(timezone); setSelectedDate(currentDate); setMiniMonth(currentDate); }} type="button">{view === "overview" ? "本月" : "今天"}</button><button aria-label={view === "overview" ? "DDL 下个月" : "下一个时间段"} title={view === "overview" ? "下个月" : undefined} onClick={() => navigate(1)} type="button">{view === "overview" ? "下月 ›" : "›"}</button><strong>{displayMonth(selectedDate, timezone)}</strong></div>
           <div className="view-switch" role="group" aria-label="日历视图"><button className={view === "week" ? "selected" : ""} onClick={() => setView("week")} type="button">周</button><button className={view === "month" ? "selected" : ""} onClick={() => setView("month")} type="button">月</button></div>
@@ -416,7 +418,7 @@ function App() {
         </> : <div className="topbar-spacer" />}
       </header>
 
-      {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><BackupSettings onRestored={refresh} /></> : <>
+      {page === "weekly" ? <WeeklyTodos timezone={timezone} /> : page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><BackupSettings onRestored={refresh} /></> : <>
         <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>{view === "overview" ? "点击日期查看清单 · 本地日程勾选纳入总览 · 每次重复独立完成" : "单击周视图空白时段快捷新建 · Ctrl+N 新建 · Ctrl+←/→ 切换日期 · Ctrl+1/2 周/月视图"}</p></div><button className="refresh-button" aria-label="刷新 Canvas 作业" title={canvasStatus.configured ? "从 Canvas 获取最新作业" : "连接 Canvas 后可刷新作业"} onClick={() => void refreshCanvasAssignments()} disabled={busy} type="button"><span aria-hidden="true">↻</span>刷新 Canvas 作业</button></section>
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => void refresh()} type="button">重试</button></div>}
         {view === "overview" ? <DdlOverview days={days} selectedDate={selectedDate} today={today} timezone={timezone} items={overviewItems} working={overviewWorking || busy} onSelectDate={setSelectedDate} onToggle={completeOverviewItem} onOpen={openOverviewItem} /> : view === "week" ? <WeekView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} timezone={timezone} onOpenCourse={setSelectedCourse} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} /> : <MonthView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} selectedMonth={selectedMonth} onSelectDate={setSelectedDate} onOpenCourse={setSelectedCourse} onOpen={openItem} onNew={openNew} />}

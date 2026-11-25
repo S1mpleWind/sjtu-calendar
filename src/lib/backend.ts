@@ -1,5 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export interface WeeklyTodo { id: string; title: string; details: string; completed: boolean; carriedFromWeek: string | null }
+export interface TodoWeek { weekStart: string; items: WeeklyTodo[] }
+export interface WeeklyTodoList { currentWeek: string; weeks: TodoWeek[] }
+export const listWeeklyTodos = (timezone: string) => invoke<WeeklyTodoList>("list_weekly_todos", { timezone });
+export const createWeeklyTodo = (timezone: string, weekStart: string, title: string, details: string) => invoke<void>("create_weekly_todo", { timezone, weekStart, title, details });
+export const updateWeeklyTodo = (timezone: string, item: WeeklyTodo) => invoke<void>("update_weekly_todo", { timezone, id: item.id, title: item.title, details: item.details, completed: item.completed });
+
 export interface LongTermItem { id: string; title: string; createdAt: string; archivedAt: string | null; note: string }
 export const listLongTermItems = () => invoke<LongTermItem[]>("list_long_term_items");
 export const createLongTermItem = (title: string, note = "") => invoke<void>("create_long_term_item", { title, note });

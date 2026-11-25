@@ -1,5 +1,11 @@
 # 数据模型（Phase 0 基线）
 
+## Weekly Todo (schema v10)
+
+`weekly_todo_weeks` registers Monday start dates. `weekly_todos` stores a per-week item ID, lineage ID, title (1–200 characters), details (up to 10,000 characters), completion flag, originating prior week and UTC creation/update timestamps. A unique `(week_start, lineage_id)` constraint prevents duplicate inheritance. Task state and details are independent for each week.
+
+The Rust provider derives the current Monday from the user's display timezone. A single immediate SQLite transaction creates missing weeks in order and copies each previous week's incomplete tasks and details once. Multi-week absences are caught up; completed tasks stop propagating. Subsequent edits/additions to an existing historical week affect that week only. Listing is newest-first and does not expose future weeks if a timezone change crosses the Monday boundary. SQLite backup/restore includes both tables; older databases and backups migrate without changing existing calendar data.
+
 ## Long-term checklist (schema v8)
 
 Schema v9 adds `long_term_items.note` as non-null text with an empty default for existing items. Creation and note updates validate a 4,000-character limit. Archiving/restoring preserves notes; SQLite backups include them.

@@ -203,3 +203,11 @@
 - Creation from overview (including Ctrl+N) now opts in by default. Editor mutations have their own pending state and synchronous submission lock; background reads no longer disable the save button or clear the modal's error. Save/delete failures retain input and show the actual error in the dialog. Moving the start beyond the end adjusts the end while preserving the prior duration; invalid ordering is explained before submission.
 - Schema v9 adds long-term item notes with an empty default for existing rows. Notes may be entered during creation or edited on active/archived items, remain through archive/restore, and are included in SQLite backups. API validation limits notes to 4000 characters.
 - Verification: `pnpm lint`, `pnpm build`, `cargo fmt`, `cargo check`, and `git diff --check` passed. No test suite or native UI interaction was run for this change. No release was published.
+
+## Weekly Todo — 2026-11-25
+
+- Added a sidebar destination with the current week expanded first and prior weeks collapsed below. Every week has a plus button for manual tasks; task titles expand to editable titles and details. Completion is persisted independently per week.
+- Schema v10 adds weekly_todo_weeks and weekly_todos. The backend derives Monday in the selected display timezone, creates skipped weeks and carries forward only incomplete items, including details. Each lineage is unique per week; rollover/copy operations use one immediate transaction to avoid duplicate inheritance under concurrent reads/writes. Historical edits do not retroactively modify later copies.
+- Reads on opening/focus, successful mutations, and a one-minute interval keep an open weekly page current across a week boundary. Existing history survives restarts and SQLite backup/restore. No runtime demo data is used.
+- Verification: pnpm lint, pnpm build, cargo fmt, cargo check and git diff --check passed. No tests were added or run; native interactive acceptance and a real clock transition were not exercised. No installer or remote release was changed in this task.
+- API references consulted: https://docs.rs/rusqlite/latest/rusqlite/enum.TransactionBehavior.html and https://docs.rs/chrono/latest/chrono/trait.Datelike.html; compilation used the project's locked dependencies.

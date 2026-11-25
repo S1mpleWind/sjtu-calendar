@@ -4,6 +4,7 @@ mod db;
 mod events;
 mod long_term;
 mod sjtu;
+mod weekly_todos;
 mod widget;
 
 use serde::Serialize;
@@ -28,6 +29,58 @@ struct WidgetStatus {
     canvas_last_success_at: Option<String>,
     sjtu_last_success_at: Option<String>,
     always_on_top: bool,
+}
+
+#[tauri::command]
+fn list_weekly_todos(
+    state: State<'_, AppState>,
+    timezone: String,
+) -> Result<weekly_todos::WeeklyTodoList, String> {
+    weekly_todos::list(&state.database_path, &timezone)
+}
+
+#[tauri::command]
+fn create_weekly_todo(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    timezone: String,
+    week_start: String,
+    title: String,
+    details: String,
+) -> Result<(), String> {
+    changed(
+        &app,
+        weekly_todos::create(
+            &state.database_path,
+            &timezone,
+            &week_start,
+            &title,
+            &details,
+        ),
+    )
+}
+
+#[tauri::command]
+fn update_weekly_todo(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    timezone: String,
+    id: String,
+    title: String,
+    details: String,
+    completed: bool,
+) -> Result<(), String> {
+    changed(
+        &app,
+        weekly_todos::update(
+            &state.database_path,
+            &timezone,
+            &id,
+            &title,
+            &details,
+            completed,
+        ),
+    )
 }
 
 #[tauri::command]
@@ -439,6 +492,9 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             get_backend_status,
+            list_weekly_todos,
+            create_weekly_todo,
+            update_weekly_todo,
             list_long_term_items,
             create_long_term_item,
             update_long_term_item_note,
