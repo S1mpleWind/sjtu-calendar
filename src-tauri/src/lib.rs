@@ -66,9 +66,9 @@ fn update_weekly_todo(
     state: State<'_, AppState>,
     timezone: String,
     id: String,
-    title: String,
-    details: String,
-    completed: bool,
+    title: Option<String>,
+    details: Option<String>,
+    completed: Option<bool>,
 ) -> Result<(), String> {
     changed(
         &app,
@@ -76,8 +76,8 @@ fn update_weekly_todo(
             &state.database_path,
             &timezone,
             &id,
-            &title,
-            &details,
+            title.as_deref(),
+            details.as_deref(),
             completed,
         ),
     )

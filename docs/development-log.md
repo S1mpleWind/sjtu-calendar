@@ -217,3 +217,9 @@
 - Single-clicking a task title expands/collapses its detail area without repeating title/details field labels. Double-clicking edits the title in place; Enter/blur saves, Escape cancels, and F2 provides keyboard access.
 - Double-click cancels the pending single-click action/restores the prior expanded state. Title saves are guarded against duplicate Enter/blur requests and preserve any unsaved details draft. Details save separately.
 - Verification: pnpm lint, pnpm build and git diff --check passed. Native mouse/keyboard acceptance and automated tests were not run; no remote release was changed.
+
+### Weekly Todo automatic detail saving — 2026-11-25
+
+- Removed detail placeholders and Save/Cancel controls. Details save after a 600 ms pause, on blur, and when leaving the row; failed saves retain the draft with an error. Creation retains only its Add action; the plus button or Escape closes its input area.
+- Title, details and completion updates now use optional field patches. Writes are serialized so autosaving details cannot overwrite a concurrent title/completion change; background saves leave typing and completion controls available.
+- Verification: pnpm lint, pnpm build, cargo fmt, cargo check and git diff --check passed. Tests/native interactions were not run. No remote release was changed.

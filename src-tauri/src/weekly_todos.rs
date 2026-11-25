@@ -187,18 +187,18 @@ pub fn update(
     path: &Path,
     timezone: &str,
     id: &str,
-    title: &str,
-    details: &str,
-    completed: bool,
+    title: Option<&str>,
+    details: Option<&str>,
+    completed: Option<bool>,
 ) -> Result<(), String> {
-    validate(title, details)?;
+    validate(title.unwrap_or("未修改标题"), details.unwrap_or(""))?;
     let current = current_week(timezone)?;
     let mut connection = connect(path)?;
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
     roll_forward(&transaction, current)?;
-    let changed = transaction.execute("UPDATE weekly_todos SET title=?1,details=?2,completed=?3,updated_at=?4 WHERE id=?5 AND week_start<=?6", params![title.trim(), details, completed, Utc::now().to_rfc3339(), id, current.to_string()]).map_err(db_error)?;
+    let changed = transaction.execute("UPDATE weekly_todos SET title=COALESCE(?1,title),details=COALESCE(?2,details),completed=COALESCE(?3,completed),updated_at=?4 WHERE id=?5 AND week_start<=?6", params![title.map(str::trim), details, completed, Utc::now().to_rfc3339(), id, current.to_string()]).map_err(db_error)?;
     if changed == 0 {
         return Err("该任务不存在，请刷新后重试".into());
     }
