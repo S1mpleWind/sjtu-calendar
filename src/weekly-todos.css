@@ -19,7 +19,7 @@
 .weekly-carried { margin: 5px 0 0 27px; color: #8b998e; font-size: 10px; }
 .weekly-details-preview { margin: 8px 0 0 27px; color: #87928a; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .weekly-editor { display: flex; flex-direction: column; gap: 13px; margin: 16px 0 0 27px; max-width: 760px; }.weekly-editor label { display: flex; flex-direction: column; gap: 7px; color: #738376; font-size: 11px; }
-.weekly-editor input, .weekly-editor textarea { width: 100%; border: 1px solid #dae3d8; border-radius: 7px; padding: 9px 11px; background: #fcfdfb; color: #344a3a; font-size: 12px; }.weekly-editor textarea { resize: vertical; line-height: 1.7; }
+.weekly-editor input, .weekly-editor textarea { width: 100%; border: 1px solid #dae3d8; border-radius: 7px; padding: 9px 11px; background: #fcfdfb; color: #344a3a; font-size: 12px; }.weekly-editor textarea { min-height: 40px; resize: none; overflow-y: hidden; line-height: 1.7; }
 .weekly-editor input:focus, .weekly-editor textarea:focus { outline: 2px solid #b7d2bf; outline-offset: 1px; }
 .weekly-editor-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }.weekly-editor-actions button { border: 0; border-radius: 6px; background: #34785c; color: #fff; padding: 7px 13px; font-size: 11px; }.weekly-editor-actions button.secondary { color: #758278; background: #eef2eb; }.weekly-editor-actions span { font-size: 10px; color: #7c8b80; }
 .weekly-add-form { padding: 16px; margin: 16px 0; border: 1px solid #e1e9df; border-radius: 9px; background: #f8fbf6; }.weekly-add-form summary { font-size: 11px; color: #738376; cursor: pointer; }.weekly-add-form details textarea { margin-top: 10px; }

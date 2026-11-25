@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type TextareaHTMLAttributes } from "react";
 import { createWeeklyTodo, listWeeklyTodos, updateWeeklyTodo, type WeeklyTodo, type WeeklyTodoList, type WeeklyTodoPatch } from "./lib/backend";
 import { useCalendarUpdates } from "./lib/calendar-updates";
 import "./weekly-todos.css";
@@ -10,6 +10,32 @@ function weekEnd(start: string) {
 }
 
 type SaveItem = (item: WeeklyTodoPatch, background?: boolean) => Promise<boolean>;
+
+function fitTextarea(element: HTMLTextAreaElement) {
+  if (!element.clientWidth) return;
+  element.style.height = "0px";
+  const border = element.offsetHeight - element.clientHeight;
+  element.style.height = `${element.scrollHeight + border}px`;
+}
+
+function AutoHeightTextarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const element = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => { if (element.current) fitTextarea(element.current); }, [props.value]);
+  useEffect(() => {
+    const textarea = element.current;
+    if (!textarea) return;
+    let previousWidth = textarea.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (textarea.clientWidth !== previousWidth) {
+        previousWidth = textarea.clientWidth;
+        fitTextarea(textarea);
+      }
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, []);
+  return <textarea {...props} rows={1} ref={element} />;
+}
 
 function TodoRow({ item, working, onSave }: { item: WeeklyTodo; working: boolean; onSave: SaveItem }) {
   const [expanded, setExpanded] = useState(false);
@@ -72,7 +98,7 @@ function TodoRow({ item, working, onSave }: { item: WeeklyTodo; working: boolean
     {item.carriedFromWeek && <p className="weekly-carried">从 {item.carriedFromWeek} 那周延续</p>}
     {!expanded && item.details && <p className="weekly-details-preview">{item.details}</p>}
     {expanded && <div className="weekly-editor">
-      <textarea aria-label={`${item.title}的详细内容`} rows={5} maxLength={10000} value={details} onChange={(event) => {
+      <AutoHeightTextarea aria-label={`${item.title}的详细内容`} maxLength={10000} value={details} onChange={(event) => {
         const value = event.target.value; draftDetails.current = value; setDetails(value); setMessage("");
         window.clearTimeout(saveTimer.current);
         saveTimer.current = window.setTimeout(() => void persistDetails(value), 600);
@@ -93,7 +119,7 @@ function AddTodo({ working, onAdd, onCancel }: { working: boolean; onAdd: (title
   }
   return <form className="weekly-editor weekly-add-form" onSubmit={(event) => void submit(event)} onKeyDown={(event) => { if (event.key === "Escape" && !working) onCancel(); }}>
     <input autoFocus required maxLength={200} aria-label="每周任务标题" value={title} disabled={working} onChange={(event) => setTitle(event.target.value)} />
-    <details><summary>详细内容（可选）</summary><textarea aria-label="新任务详细内容" rows={4} maxLength={10000} value={details} disabled={working} onChange={(event) => setDetails(event.target.value)} /></details>
+    <details><summary>详细内容（可选）</summary><AutoHeightTextarea aria-label="新任务详细内容" maxLength={10000} value={details} disabled={working} onChange={(event) => setDetails(event.target.value)} /></details>
     <div className="weekly-editor-actions"><button type="submit" disabled={working || !title.trim()}>添加</button></div>
     {error && <p className="weekly-form-error" role="alert">{error}</p>}
   </form>;
