@@ -13,10 +13,12 @@ import "./App.css";
 import { dayMinutes, groupByDay } from "./lib/calendar-days";
 import { useCalendarUpdates } from "./lib/calendar-updates";
 import DdlOverview from "./DdlOverview";
+import WeeklyTodos from "./WeeklyTodos";
 import { buildOverviewItems, type OverviewItem } from "./lib/ddl-overview";
+import { canvasCompleted, canvasRemotelyCompleted, canvasSubmissionLabel } from "./lib/canvas-status";
 
 type View = "week" | "month" | "overview";
-type EditorState = { event?: PersonalEvent; occurrence?: CalendarOccurrence; date: string; startTime?: string };
+type EditorState = { event?: PersonalEvent; occurrence?: CalendarOccurrence; date: string; startTime?: string; includeInOverview?: boolean };
 const ZONES = ["Asia/Shanghai", "Asia/Tokyo", "America/New_York", "Europe/London", "UTC"];
 const FIRST_HOUR = 7;
 const LAST_HOUR = 23;
@@ -142,8 +144,9 @@ function App() {
   const [selectedCanvasDeadline, setSelectedCanvasDeadline] = useState<CanvasDeadline | null>(null);
   const [status, setStatus] = useState<BackendStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [eventWorking, setEventWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState<"calendar" | "settings">("calendar");
+  const [page, setPage] = useState<"calendar" | "settings" | "weekly">("calendar");
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [overviewWorking, setOverviewWorking] = useState(false);
   const refreshSequence = useRef(0);
@@ -234,7 +237,7 @@ function App() {
     setSelectedDate(date);
     setMiniMonth(date);
   }
-  function openNew(date = selectedDate, startTime?: string) { setEditor({ date, startTime }); }
+  function openNew(date = selectedDate, startTime?: string) { setEditor({ date, startTime, includeInOverview: view === "overview" }); }
   async function openItem(item: CalendarOccurrence) {
     try {
       const event = await getPersonalEvent(item.eventId);
@@ -243,7 +246,7 @@ function App() {
   }
   async function saveItem(draft: EventDraft, scope: "series" | "single") {
     if (!editor) return;
-    setBusy(true);
+    setEventWorking(true);
     setError(null);
     try {
       if (editor.occurrence && editor.event?.rrule && scope === "single") {
@@ -259,12 +262,11 @@ function App() {
       else await createPersonalEvent(draft);
       setEditor(null);
       await refresh();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败，请检查日程信息。"); }
-    finally { setBusy(false); }
+    } finally { setEventWorking(false); }
   }
   async function removeItem(scope: "series" | "single") {
     if (!editor?.event) return;
-    setBusy(true);
+    setEventWorking(true);
     setError(null);
     try {
       if (editor.occurrence && editor.event.rrule && scope === "single") {
@@ -272,8 +274,7 @@ function App() {
       } else await deletePersonalEvent(editor.event.id);
       setEditor(null);
       await refresh();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "删除失败"); }
-    finally { setBusy(false); }
+    } finally { setEventWorking(false); }
   }
 
   async function markCanvasDeadline(item: CanvasDeadline, completed: boolean) {
@@ -361,7 +362,7 @@ function App() {
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
       if (event.key.toLowerCase() === "n") {
-        event.preventDefault(); setPage("calendar"); setEditor({ date: selectedDate });
+        event.preventDefault(); setPage("calendar"); setEditor({ date: selectedDate, includeInOverview: view === "overview" });
       } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
         const offset = event.key === "ArrowLeft" ? -1 : 1;
@@ -386,7 +387,8 @@ function App() {
       <div className="brand"><span className="brand-mark">S</span><div><strong>SJTU Schedule</strong><small>个人日历</small></div></div>
       <nav className="side-nav" aria-label="主导航">
         <button className={page === "calendar" && view !== "overview" ? "side-link active" : "side-link"} onClick={() => { setPage("calendar"); if (view === "overview") setView("week"); }} type="button"><span>▦</span>日历</button>
-        <button className={page === "calendar" && view === "overview" ? "side-link active" : "side-link"} onClick={() => { setPage("calendar"); setView("overview"); }} type="button"><span aria-hidden="true">◉</span>DDL 总览</button>
+        <button className={page === "calendar" && view === "overview" ? "side-link active" : "side-link"} onClick={() => { const currentDate = todayInZone(timezone); setSelectedDate(currentDate); setMiniMonth(currentDate); setPage("calendar"); setView("overview"); }} type="button"><span aria-hidden="true">◉</span>DDL 总览</button>
+        <button className={page === "weekly" ? "side-link active" : "side-link"} onClick={() => setPage("weekly")} type="button"><span aria-hidden="true">☑</span>每周 Todo</button>
         <button className={page === "settings" ? "side-link active" : "side-link"} onClick={() => setPage("settings")} type="button"><span>⚙</span>设置</button>
       </nav>
       <section className="mini-calendar" aria-label="迷你日历">
@@ -407,16 +409,16 @@ function App() {
 
     <section className="main-area">
       <header className="topbar">
-        <div className="heading"><p className="eyebrow">{page === "calendar" ? "你的安排，一目了然" : "本地偏好设置"}</p><h1>{page === "calendar" ? view === "overview" ? "DDL 总览" : "日历" : "设置"}</h1></div>
+        <div className="heading"><p className="eyebrow">{page === "weekly" ? "按周管理任务" : page === "calendar" ? "你的安排，一目了然" : "本地偏好设置"}</p><h1>{page === "weekly" ? "每周 Todo" : page === "calendar" ? view === "overview" ? "DDL 总览" : "日历" : "设置"}</h1></div>
         {page === "calendar" ? <>
-          <div className="date-nav"><button aria-label="上一个时间段" onClick={() => navigate(-1)} type="button">‹</button><button className="today-button" onClick={() => { setSelectedDate(today); setMiniMonth(today); }} type="button">今天</button><button aria-label="下一个时间段" onClick={() => navigate(1)} type="button">›</button><strong>{displayMonth(selectedDate, timezone)}</strong></div>
+          <div className={`date-nav ${view === "overview" ? "overview-date-nav" : ""}`}><button aria-label={view === "overview" ? "DDL 上个月" : "上一个时间段"} title={view === "overview" ? "上个月" : undefined} onClick={() => navigate(-1)} type="button">{view === "overview" ? "‹ 上月" : "‹"}</button><button className="today-button" onClick={() => { const currentDate = todayInZone(timezone); setSelectedDate(currentDate); setMiniMonth(currentDate); }} type="button">{view === "overview" ? "本月" : "今天"}</button><button aria-label={view === "overview" ? "DDL 下个月" : "下一个时间段"} title={view === "overview" ? "下个月" : undefined} onClick={() => navigate(1)} type="button">{view === "overview" ? "下月 ›" : "›"}</button><strong>{displayMonth(selectedDate, timezone)}</strong></div>
           <div className="view-switch" role="group" aria-label="日历视图"><button className={view === "week" ? "selected" : ""} onClick={() => setView("week")} type="button">周</button><button className={view === "month" ? "selected" : ""} onClick={() => setView("month")} type="button">月</button></div>
           <button className="widget-open-button" onClick={() => void toggleWidget().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "无法打开 Widget"))} type="button">▣ Widget</button>
           <button className="new-button" onClick={() => openNew()} type="button"><span>＋</span>新建日程</button>
         </> : <div className="topbar-spacer" />}
       </header>
 
-      {page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><BackupSettings onRestored={refresh} /></> : <>
+      {page === "weekly" ? <WeeklyTodos timezone={timezone} /> : page === "settings" ? <><Settings timezone={timezone} onTimezoneChange={setTimezone} /><CanvasSettings canvasStatus={canvasStatus} notice={canvasNotice} onConnect={connectCanvas} onTest={runCanvasTest} onSync={runCanvasSync} onDisconnect={disconnectCanvas} /><SjtuSettings status={sjtuStatus} notice={sjtuNotice} onStart={openSjtuLogin} onFinish={finishSjtuLoginFlow} onDisconnect={disconnectSjtu} onSync={refreshSjtu} /><BackupSettings onRestored={refresh} /></> : <>
         <section className="calendar-toolbar"><div><h2>{view === "week" ? `${displayDate(range.from)} – ${displayDate(range.to)}` : displayMonth(selectedDate, timezone)}</h2><p>{view === "overview" ? "点击日期查看清单 · 本地日程勾选纳入总览 · 每次重复独立完成" : "单击周视图空白时段快捷新建 · Ctrl+N 新建 · Ctrl+←/→ 切换日期 · Ctrl+1/2 周/月视图"}</p></div><button className="refresh-button" aria-label="刷新 Canvas 作业" title={canvasStatus.configured ? "从 Canvas 获取最新作业" : "连接 Canvas 后可刷新作业"} onClick={() => void refreshCanvasAssignments()} disabled={busy} type="button"><span aria-hidden="true">↻</span>刷新 Canvas 作业</button></section>
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => void refresh()} type="button">重试</button></div>}
         {view === "overview" ? <DdlOverview days={days} selectedDate={selectedDate} today={today} timezone={timezone} items={overviewItems} working={overviewWorking || busy} onSelectDate={setSelectedDate} onToggle={completeOverviewItem} onOpen={openOverviewItem} /> : view === "week" ? <WeekView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} timezone={timezone} onOpenCourse={setSelectedCourse} onSelectDate={setSelectedDate} onOpen={openItem} onNew={openNew} /> : <MonthView days={days} grouped={grouped} coursesByDay={coursesByDay} selectedDate={selectedDate} today={today} selectedMonth={selectedMonth} onSelectDate={setSelectedDate} onOpenCourse={setSelectedCourse} onOpen={openItem} onNew={openNew} />}
@@ -424,7 +426,7 @@ function App() {
         <footer className="calendar-footer"><span><i className="online-dot" />数据保存在此设备</span><span>{busy ? "正在读取本地日程…" : `${occurrences.length} 个日程实例`}</span></footer>
       </>}
     </section>
-    {editor && <EventEditor key={`${editor.event?.id ?? "new"}-${editor.occurrence?.occurrenceId ?? editor.date}`} editor={editor} timezone={timezone} busy={busy} onClose={() => setEditor(null)} onSave={saveItem} onDelete={removeItem} />}
+    {editor && <EventEditor key={`${editor.event?.id ?? "new"}-${editor.occurrence?.occurrenceId ?? editor.date}`} editor={editor} timezone={timezone} busy={eventWorking} onClose={() => setEditor(null)} onSave={saveItem} onDelete={removeItem} />}
     {selectedCourse && <CourseDetails course={selectedCourse} onSaveNote={saveCourseOccurrenceNote} onClose={() => setSelectedCourse(null)} />}
     {selectedCanvasDeadline && <CanvasAssignmentDetails deadline={selectedCanvasDeadline} timezone={timezone} onClose={() => setSelectedCanvasDeadline(null)} />}
   </main>;
@@ -499,14 +501,8 @@ function BackupSettings({ onRestored }: { onRestored: () => Promise<void> }) {
   async function exportBackup() {
     setWorking(true); setProblem(""); setMessage("");
     try {
-      const payload = await exportDataBackup();
-      const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `sjtu-schedule-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
-      setMessage("备份已生成，请在浏览器下载位置确认文件已保存。");
+      const savedPath = await exportDataBackup();
+      if (savedPath) setMessage(`备份已保存到：${savedPath}`);
     } catch (reason) { setProblem(reason instanceof Error ? reason.message : "导出备份失败"); }
     finally { setWorking(false); }
   }
@@ -523,6 +519,7 @@ function BackupSettings({ onRestored }: { onRestored: () => Promise<void> }) {
   }
   return <section className="settings-panel backup-settings"><div className="settings-title"><div className="settings-icon">DB</div><div><h2>数据备份与恢复</h2><p>备份本地日程和同步缓存；Credential Manager 中的外部账户凭据不包含在内。</p></div></div>
     <div className="settings-actions"><button className="save-button" disabled={working} onClick={() => void exportBackup()} type="button">导出数据库备份</button></div>
+    <p className="settings-help">选择备份的保存位置，默认打开 Downloads（下载）文件夹。</p>
     <label className="form-field"><span>从备份恢复</span><input type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; setFileName(file?.name ?? ""); setProblem(""); setMessage(""); void file?.text().then(setBackupJson).catch(() => setProblem("无法读取备份文件")); }} /></label>
     {fileName && <p className="settings-help">已选择：{fileName}</p>}
     <button className="cancel-button" disabled={working || !backupJson} onClick={() => void restoreBackup()} type="button">验证并恢复备份</button>
@@ -546,7 +543,7 @@ function CourseDetails({ course, onClose, onSaveNote }: { course: SjtuCourseOccu
 
 function CanvasAssignmentDetails({ deadline, timezone, onClose }: { deadline: CanvasDeadline; timezone: string; onClose: () => void }) {
   const due = new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, dateStyle: "full", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(deadline.dueAt));
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="event-modal course-details" role="dialog" aria-modal="true" aria-labelledby="canvas-details-title"><header className="modal-header"><div><p className="eyebrow">Canvas 作业</p><h2 id="canvas-details-title">{deadline.title}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header><div className="form-scroll"><p><strong>课程：</strong>{deadline.courseName}</p><p><strong>截止：</strong>{due}</p><p><strong>提交状态：</strong>{deadline.submittedAt ? "已提交" : deadline.localCompleted ? "已在本地标记完成" : "未完成"}</p>{deadline.description && <p className="canvas-detail-description">{deadline.description}</p>}<p><strong>Canvas 链接：</strong><a href={deadline.htmlUrl} target="_blank" rel="noreferrer">{deadline.htmlUrl}</a></p></div><footer className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>关闭</button></footer></section></div>;
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="event-modal course-details" role="dialog" aria-modal="true" aria-labelledby="canvas-details-title"><header className="modal-header"><div><p className="eyebrow">Canvas 作业</p><h2 id="canvas-details-title">{deadline.title}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header><div className="form-scroll"><p><strong>课程：</strong>{deadline.courseName}</p><p><strong>截止：</strong>{due}</p><p><strong>提交状态：</strong>{canvasSubmissionLabel(deadline)}</p>{deadline.description && <p className="canvas-detail-description">{deadline.description}</p>}<p><strong>Canvas 链接：</strong><a href={deadline.htmlUrl} target="_blank" rel="noreferrer">{deadline.htmlUrl}</a></p></div><footer className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>关闭</button></footer></section></div>;
 }
 
 function intervalLabel(startUtc: string, endUtc: string, timezone: string) {
@@ -555,7 +552,7 @@ function intervalLabel(startUtc: string, endUtc: string, timezone: string) {
 }
 
 function CanvasDeadlineStrip({ days, deadlines, timezone, onComplete }: { days: string[]; deadlines: Map<string, CanvasDeadline[]>; timezone: string; onComplete: (item: CanvasDeadline, completed: boolean) => void }) {
-  return <section className="canvas-strip" aria-label="Canvas 截止事项">{days.map((day) => <div className="canvas-strip-day" key={day}>{(deadlines.get(day) ?? []).map((item) => <div className={`canvas-deadline ${item.localCompleted ? "completed" : ""}`} key={`${item.courseId}-${item.assignmentId}`}><label><input type="checkbox" aria-label={`标记 ${item.title} 完成`} checked={item.localCompleted} onChange={(event) => onComplete(item, event.target.checked)} /><a href={item.htmlUrl} target="_blank" rel="noreferrer" title={item.courseName}>{item.title}</a></label><small>{item.courseName} · {new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(item.dueAt))}</small></div>)}</div>)}</section>;
+  return <section className="canvas-strip" aria-label="Canvas 截止事项">{days.map((day) => <div className="canvas-strip-day" key={day}>{(deadlines.get(day) ?? []).map((item) => <div className={`canvas-deadline ${canvasCompleted(item) ? "completed" : ""}`} key={`${item.courseId}-${item.assignmentId}`}><label><input type="checkbox" aria-label={`标记 ${item.title} 完成`} checked={canvasCompleted(item)} disabled={canvasRemotelyCompleted(item)} title={canvasSubmissionLabel(item)} onChange={(event) => onComplete(item, event.target.checked)} /><a href={item.htmlUrl} target="_blank" rel="noreferrer" title={item.courseName}>{item.title}</a></label><small>{canvasSubmissionLabel(item)} · {item.courseName} · {new Intl.DateTimeFormat("zh-CN", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(item.dueAt))}</small></div>)}</div>)}</section>;
 }
 
 function WeekView({ days, grouped, coursesByDay, selectedDate, today, timezone, onOpenCourse, onSelectDate, onOpen, onNew }: {
@@ -618,7 +615,7 @@ function EventEditor(props: EventEditorProps) {
   return <EventEditorForm key={scope} {...props} scope={scope} onScopeChange={setScope} />;
 }
 
-function EventEditorForm({ editor, timezone, busy, onClose, onSave, onDelete, scope, onScopeChange }: EventEditorProps & { scope: "single" | "series"; onScopeChange: (scope: "single" | "series") => void }) {
+function EventEditorForm({ editor, timezone, busy: backendBusy, onClose, onSave, onDelete, scope, onScopeChange }: EventEditorProps & { scope: "single" | "series"; onScopeChange: (scope: "single" | "series") => void }) {
   const initial = scope === "single" && editor.event && editor.occurrence ? {
     ...editor.event,
     title: editor.occurrence.title,
@@ -631,7 +628,7 @@ function EventEditorForm({ editor, timezone, busy, onClose, onSave, onDelete, sc
     allDay: editor.occurrence.allDay,
     color: editor.occurrence.color,
     includeInOverview: editor.occurrence.includeInOverview,
-  } : editor.event ?? emptyDraft(editor.date, timezone, editor.startTime);
+  } : editor.event ?? { ...emptyDraft(editor.date, timezone, editor.startTime), includeInOverview: editor.includeInOverview ?? false };
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description);
   const [location, setLocation] = useState(initial.location);
@@ -643,24 +640,49 @@ function EventEditorForm({ editor, timezone, busy, onClose, onSave, onDelete, sc
   const [includeInOverview, setIncludeInOverview] = useState(initial.includeInOverview ?? initial.category === "deadline");
   const [repeat, setRepeat] = useState(initial.rrule ?? "");
   const [color, setColor] = useState(initial.color);
+  const [submitError, setSubmitError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
   const recurringOccurrence = !!editor.occurrence && !!editor.event?.rrule;
   const draft: EventDraft = {
     title, description, location, category, startLocal: localValue(start), endLocal: localValue(end), timezone: eventZone,
     allDay, rrule: repeat || null, color, includeInOverview,
   };
-  function submit(event: FormEvent, scope: "series" | "single") { event.preventDefault(); void onSave(draft, scope); }
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><form className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title" onSubmit={(event) => submit(event, scope)}>
-    <header className="modal-header"><div><p className="eyebrow">{editor.event ? "编辑本地日程" : "添加到个人日历"}</p><h2 id="event-modal-title">{editor.event ? "日程详情" : "新建日程"}</h2></div><button type="button" aria-label="关闭" onClick={onClose}>×</button></header>
+  function changeStart(value: string) {
+    if (value && end && value >= end) {
+      const duration = Math.max(60_000, Date.parse(end + "Z") - Date.parse(start + "Z")) || 3_600_000;
+      const nextEnd = new Date(Date.parse(value + "Z") + duration);
+      if (Number.isFinite(nextEnd.getTime())) setEnd(nextEnd.toISOString().slice(0, 16));
+    }
+    setStart(value); setSubmitError("");
+  }
+  async function run(action: () => Promise<void>) {
+    if (submitLock.current) return;
+    submitLock.current = true; setSubmitting(true); setSubmitError("");
+    try { await action(); }
+    catch (reason) { setSubmitError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { submitLock.current = false; setSubmitting(false); }
+  }
+  function submit(event: FormEvent, scope: "series" | "single") {
+    event.preventDefault();
+    if (!title.trim()) { setSubmitError("请输入日程标题"); return; }
+    if (!start || !end || end <= start) { setSubmitError("结束时间必须晚于开始时间，请检查日期和时间。"); return; }
+    void run(() => onSave({ ...draft, title: title.trim() }, scope));
+  }
+  const busy = backendBusy || submitting;
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (!busy && event.target === event.currentTarget) onClose(); }}><form className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title" onSubmit={(event) => submit(event, scope)}>
+    <header className="modal-header"><div><p className="eyebrow">{editor.event ? "编辑本地日程" : "添加到个人日历"}</p><h2 id="event-modal-title">{editor.event ? "日程详情" : "新建日程"}</h2></div><button type="button" disabled={busy} aria-label="关闭" onClick={onClose}>×</button></header>
     <div className="form-scroll">{recurringOccurrence && <label className="form-field"><span>编辑范围（切换后重新载入对应日程）</span><select aria-label="编辑范围" value={scope} disabled={busy} onChange={(event) => onScopeChange(event.target.value as "single" | "series")}><option value="single">仅本次</option><option value="series">整个系列</option></select></label>}<label className="form-field"><span>标题</span><input autoFocus required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：项目讨论" /></label>
       <div className="form-two"><label className="form-field"><span>类型</span><select value={category} onChange={(event) => { const value = event.target.value as EventDraft["category"]; setCategory(value); if (value === "deadline") setIncludeInOverview(true); }}><option value="event">日程</option><option value="deadline">截止事项</option></select></label><label className="form-field"><span>重复</span><select value={repeat} disabled={recurringOccurrence && scope === "single"} onChange={(event) => setRepeat(event.target.value)}><option value="">不重复</option><option value="FREQ=DAILY">每天</option><option value="FREQ=WEEKLY">每周</option><option value="FREQ=WEEKLY;INTERVAL=2">每两周</option>{repeat && !["FREQ=DAILY", "FREQ=WEEKLY", "FREQ=WEEKLY;INTERVAL=2"].includes(repeat) && <option value={repeat}>自定义规则（保留）</option>}</select></label></div>
-      <div className="form-two"><label className="form-field"><span>开始</span><input required type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} /></label><label className="form-field"><span>结束</span><input required type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
+      <div className="form-two"><label className="form-field"><span>开始</span><input required type="datetime-local" value={start} onChange={(event) => changeStart(event.target.value)} /></label><label className="form-field"><span>结束</span><input required type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
       <div className="form-two"><label className="form-field"><span>时区</span><select value={eventZone} onChange={(event) => setEventZone(event.target.value)}>{ZONES.map((zone) => <option value={zone} key={zone}>{zone}</option>)}</select></label><label className="form-field color-field"><span>颜色</span><input type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label></div>
       <label className="check-field"><input type="checkbox" checked={allDay} onChange={(event) => setAllDay(event.target.checked)} />全天事件</label>
       <label className="check-field"><input type="checkbox" checked={includeInOverview} onChange={(event) => setIncludeInOverview(event.target.checked)} />纳入 DDL 总览（按开始日期统计）</label>
       <label className="form-field"><span>地点</span><input maxLength={200} value={location} onChange={(event) => setLocation(event.target.value)} placeholder="添加地点" /></label>
       <label className="form-field"><span>备注</span><textarea rows={3} maxLength={4000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="添加说明" /></label>
+      {submitError && <div className="error-banner" role="alert">{submitError}</div>}
     </div>
-    <footer className="modal-actions"><div>{editor.event && <button className="delete-button" disabled={busy} onClick={() => void onDelete(scope)} type="button">{recurringOccurrence ? scope === "single" ? "仅删除此项" : "删除整个系列" : "删除日程"}</button>}</div><div><button className="cancel-button" onClick={onClose} type="button">取消</button><button className="save-button" disabled={busy} type="submit">{recurringOccurrence ? scope === "single" ? "保存此项" : "保存整个系列" : "保存"}</button></div></footer>
+    <footer className="modal-actions"><div>{editor.event && <button className="delete-button" disabled={busy} onClick={() => void run(() => onDelete(scope))} type="button">{recurringOccurrence ? scope === "single" ? "仅删除此项" : "删除整个系列" : "删除日程"}</button>}</div><div><button className="cancel-button" disabled={busy} onClick={onClose} type="button">取消</button><button className="save-button" disabled={busy} type="submit">{busy ? "处理中…" : recurringOccurrence ? scope === "single" ? "保存此项" : "保存整个系列" : "保存"}</button></div></footer>
   </form></div>;
 }
 

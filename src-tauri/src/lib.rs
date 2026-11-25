@@ -2,12 +2,15 @@ mod backup;
 mod canvas;
 mod db;
 mod events;
+mod long_term;
 mod sjtu;
+mod weekly_todos;
 mod widget;
 
 use serde::Serialize;
 use std::{fs, path::PathBuf};
 use tauri::{Emitter, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 
 struct AppState {
     database_path: PathBuf,
@@ -26,6 +29,104 @@ struct WidgetStatus {
     canvas_last_success_at: Option<String>,
     sjtu_last_success_at: Option<String>,
     always_on_top: bool,
+}
+
+#[tauri::command]
+fn list_weekly_todos(
+    state: State<'_, AppState>,
+    timezone: String,
+) -> Result<weekly_todos::WeeklyTodoList, String> {
+    weekly_todos::list(&state.database_path, &timezone)
+}
+
+#[tauri::command]
+fn create_weekly_todo(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    timezone: String,
+    week_start: String,
+    title: String,
+    details: String,
+) -> Result<(), String> {
+    changed(
+        &app,
+        weekly_todos::create(
+            &state.database_path,
+            &timezone,
+            &week_start,
+            &title,
+            &details,
+        ),
+    )
+}
+
+#[tauri::command]
+fn update_weekly_todo(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    timezone: String,
+    id: String,
+    title: Option<String>,
+    details: Option<String>,
+    completed: Option<bool>,
+) -> Result<(), String> {
+    changed(
+        &app,
+        weekly_todos::update(
+            &state.database_path,
+            &timezone,
+            &id,
+            title.as_deref(),
+            details.as_deref(),
+            completed,
+        ),
+    )
+}
+
+#[tauri::command]
+fn list_long_term_items(
+    state: State<'_, AppState>,
+) -> Result<Vec<long_term::LongTermItem>, String> {
+    long_term::list(&state.database_path)
+}
+
+#[tauri::command]
+fn create_long_term_item(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    title: String,
+    note: Option<String>,
+) -> Result<(), String> {
+    changed(
+        &app,
+        long_term::create(&state.database_path, &title, note.as_deref().unwrap_or("")),
+    )
+}
+
+#[tauri::command]
+fn update_long_term_item_note(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    note: String,
+) -> Result<(), String> {
+    changed(
+        &app,
+        long_term::update_note(&state.database_path, &id, &note),
+    )
+}
+
+#[tauri::command]
+fn set_long_term_item_archived(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    archived: bool,
+) -> Result<(), String> {
+    changed(
+        &app,
+        long_term::set_archived(&state.database_path, &id, archived),
+    )
 }
 
 #[tauri::command]
@@ -70,8 +171,44 @@ fn get_backend_status(state: State<'_, AppState>) -> Result<BackendStatus, Strin
 }
 
 #[tauri::command]
-fn export_data_backup(state: State<'_, AppState>) -> Result<String, String> {
-    backup::export(&state.database_path)
+async fn export_data_backup(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let database_path = state.database_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let downloads = app
+            .path()
+            .download_dir()
+            .map_err(|_| "无法定位 Downloads 文件夹".to_string())?;
+        let mut dialog = app
+            .dialog()
+            .file()
+            .set_title("导出数据库备份")
+            .set_directory(downloads)
+            .set_file_name(format!(
+                "sjtu-schedule-backup-{}.json",
+                chrono::Local::now().format("%Y-%m-%d")
+            ))
+            .add_filter("JSON 备份", &["json"]);
+        if let Some(window) = app.get_webview_window("main") {
+            dialog = dialog.set_parent(&window);
+        }
+        let Some(destination) = dialog.blocking_save_file() else {
+            return Ok(None);
+        };
+        let destination = destination
+            .into_path()
+            .map_err(|_| "所选保存路径无效".to_string())?;
+        if destination == database_path {
+            return Err("备份不能覆盖正在使用的数据库".into());
+        }
+        let payload = backup::export(&database_path)?;
+        fs::write(&destination, payload).map_err(|error| format!("无法保存备份：{error}"))?;
+        Ok(Some(destination.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|_| "导出备份任务未完成".to_string())?
 }
 
 #[tauri::command]
@@ -329,6 +466,7 @@ fn set_sjtu_occurrence_note(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let database_directory = app.path().app_data_dir()?;
             fs::create_dir_all(&database_directory)?;
@@ -354,6 +492,13 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             get_backend_status,
+            list_weekly_todos,
+            create_weekly_todo,
+            update_weekly_todo,
+            list_long_term_items,
+            create_long_term_item,
+            update_long_term_item_note,
+            set_long_term_item_archived,
             export_data_backup,
             restore_data_backup,
             create_personal_event,

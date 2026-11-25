@@ -1,5 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export interface WeeklyTodo { id: string; title: string; details: string; completed: boolean; carriedFromWeek: string | null }
+export interface TodoWeek { weekStart: string; items: WeeklyTodo[] }
+export interface WeeklyTodoList { currentWeek: string; weeks: TodoWeek[] }
+export const listWeeklyTodos = (timezone: string) => invoke<WeeklyTodoList>("list_weekly_todos", { timezone });
+export const createWeeklyTodo = (timezone: string, weekStart: string, title: string, details: string) => invoke<void>("create_weekly_todo", { timezone, weekStart, title, details });
+export type WeeklyTodoPatch = Pick<WeeklyTodo, "id"> & Partial<Pick<WeeklyTodo, "title" | "details" | "completed">>;
+export const updateWeeklyTodo = (timezone: string, item: WeeklyTodoPatch) => invoke<void>("update_weekly_todo", { timezone, id: item.id, title: item.title ?? null, details: item.details ?? null, completed: item.completed ?? null });
+
+export interface LongTermItem { id: string; title: string; createdAt: string; archivedAt: string | null; note: string }
+export const listLongTermItems = () => invoke<LongTermItem[]>("list_long_term_items");
+export const createLongTermItem = (title: string, note = "") => invoke<void>("create_long_term_item", { title, note });
+export const updateLongTermItemNote = (id: string, note: string) => invoke<void>("update_long_term_item_note", { id, note });
+export const setLongTermItemArchived = (id: string, archived: boolean) => invoke<void>("set_long_term_item_archived", { id, archived });
+
 export interface BackendStatus {
   database: "sqlite";
   schemaVersion: number;
@@ -85,7 +99,7 @@ export const hideWidget = () => invoke<void>("hide_widget");
 export const setWidgetAlwaysOnTop = (enabled: boolean) =>
   invoke<void>("set_widget_always_on_top", { enabled });
 
-export const exportDataBackup = () => invoke<string>("export_data_backup");
+export const exportDataBackup = () => invoke<string | null>("export_data_backup");
 export const restoreDataBackup = (backupJson: string) =>
   invoke<number>("restore_data_backup", { backupJson });
 

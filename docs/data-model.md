@@ -1,5 +1,17 @@
 # 数据模型（Phase 0 基线）
 
+## Weekly Todo (schema v10)
+
+`weekly_todo_weeks` registers Monday start dates. `weekly_todos` stores a per-week item ID, lineage ID, title (1–200 characters), details (up to 10,000 characters), completion flag, originating prior week and UTC creation/update timestamps. A unique `(week_start, lineage_id)` constraint prevents duplicate inheritance. Task state and details are independent for each week.
+
+The Rust provider derives the current Monday from the user's display timezone. A single immediate SQLite transaction creates missing weeks in order and copies each previous week's incomplete tasks and details once. Multi-week absences are caught up; completed tasks stop propagating. Subsequent edits/additions to an existing historical week affect that week only. Listing is newest-first and does not expose future weeks if a timezone change crosses the Monday boundary. SQLite backup/restore includes both tables; older databases and backups migrate without changing existing calendar data.
+
+## Long-term checklist (schema v8)
+
+Schema v9 adds `long_term_items.note` as non-null text with an empty default for existing items. Creation and note updates validate a 4,000-character limit. Archiving/restoring preserves notes; SQLite backups include them.
+
+`long_term_items` stores manually entered, undated items with UUID `id`, trimmed `title` (1–200 characters), UTC `created_at` and nullable UTC `archived_at`. Checking an item sets its archive timestamp; unchecking it restores it to the active list. Items are independent of the selected calendar date/month and do not affect DDL circle colors. Schema v8 creates the table without modifying existing events or assignments. The existing SQLite backup/restore path includes this table and migrates older backups on restore.
+
 Phase 0 仅创建 `app_settings(key, value_json, updated_at)` 并以 `schema_migrations(version, applied_at)` 管理升级。初始设置保存 `Asia/Shanghai` 时区默认值，JSON 内容作为值而非 SQL 文本格式保存。
 
 后续迁移将增加独立的学期、课程、课程 meeting、作业、个人事件、重复例外、数据源和同步运行表。课程、Canvas 作业与用户日程保持分实体存储，再由 Rust 查询层投影为 `CalendarOccurrence`。Token/Cookie 不属于业务表。

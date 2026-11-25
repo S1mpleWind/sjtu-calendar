@@ -181,3 +181,45 @@
 - NSIS artifact: `src-tauri/target/release/bundle/nsis/SJTU Schedule_1.1.0_x64-setup.exe`, 3,586,924 bytes; SHA-256 `497CBCF5DB71EDEF1AA18D01A3DEF496610A78314102731BA04EDD479D53C090`.
 - Published latest stable release: https://github.com/S1mpleWind/sjtu-calendar/releases/tag/v1.1.0. GitHub reports the asset uploaded, non-draft/non-prerelease; the asset digest matches the local SHA-256 and the remote tag resolves to the source commit above.
 - Native installation and live external authentication remain unverified, as stated in the release notes.
+
+## Canvas submitted-work completion — 2026-10-24
+
+- Branch: `fix/canvas-submission-completion`.
+- Cause: Rust sync already cached submission state/timestamp, but the week/month assignment strip only read `localCompleted`; Widget also missed completed workflow states when no timestamp was present.
+- Fix: shared Canvas completion/status helpers now drive week/month checkboxes, details, the monthly DDL overview and Widget filtering. Submitted, pending-review and graded work is automatically checked; manual completion stays separate and is preserved by sync. The assignment strip shows submission state explicitly. Remote-completed checkboxes are read-only, matching the overview.
+- Official reference checked: https://developerdocs.instructure.com/services/canvas/resources/assignments and https://developerdocs.instructure.com/services/canvas/resources/submissions (submission fields and include[]=submission).
+- Verification: `pnpm lint`, `pnpm test` (36 passed), `pnpm build`, `cargo fmt --check`, `cargo test` (24 passed), and `git diff --check` passed. Regression tests simulate sync from unsubmitted to submitted and back, check week/month UI, preserve manual-vs-remote semantics and exclude submitted/graded/pending-review work from Widget pending deadlines.
+- Actual account status: fixture verified only; no credentials were read and no live Canvas synchronization was claimed. Native Windows visual review remains outstanding. Installer result is recorded after packaging.
+
+### Canvas completion fix packaging
+
+- Implementation commit: `a56455e62db4358fe6c26a50210ca882a20d8d5b`. `pnpm tauri build` passed.
+- Local NSIS package: `src-tauri/target/release/bundle/nsis/SJTU.Schedule_1.1.0_canvas-fix_a56455e_x64-setup.exe`, 3587884 bytes; SHA-256 `006A19A36ACDBEB395C768E0D022CF0326B936235849653B944A8C9DC2136AA3`.
+- The extra filename identifies this local fix separately from the published v1.1.0 artifact. No remote release was changed by this follow-up fix.
+
+## DDL event creation feedback and long-term notes — 2026-10-25
+
+- Source inspection found that overview-created personal events defaulted to exclusion from the overview; successful writes could therefore look like a failed addition. Save/delete errors were shown behind the modal and Rust string errors were replaced with generic text. These defects are fixed, but they do not establish every cause of the user's intermittent report.
+- Creation from overview (including Ctrl+N) now opts in by default. Editor mutations have their own pending state and synchronous submission lock; background reads no longer disable the save button or clear the modal's error. Save/delete failures retain input and show the actual error in the dialog. Moving the start beyond the end adjusts the end while preserving the prior duration; invalid ordering is explained before submission.
+- Schema v9 adds long-term item notes with an empty default for existing rows. Notes may be entered during creation or edited on active/archived items, remain through archive/restore, and are included in SQLite backups. API validation limits notes to 4000 characters.
+- Verification: `pnpm lint`, `pnpm build`, `cargo fmt`, `cargo check`, and `git diff --check` passed. No test suite or native UI interaction was run for this change. No release was published.
+
+## Weekly Todo — 2026-11-25
+
+- Added a sidebar destination with the current week expanded first and prior weeks collapsed below. Every week has a plus button for manual tasks; task titles expand to editable titles and details. Completion is persisted independently per week.
+- Schema v10 adds weekly_todo_weeks and weekly_todos. The backend derives Monday in the selected display timezone, creates skipped weeks and carries forward only incomplete items, including details. Each lineage is unique per week; rollover/copy operations use one immediate transaction to avoid duplicate inheritance under concurrent reads/writes. Historical edits do not retroactively modify later copies.
+- Reads on opening/focus, successful mutations, and a one-minute interval keep an open weekly page current across a week boundary. Existing history survives restarts and SQLite backup/restore. No runtime demo data is used.
+- Verification: pnpm lint, pnpm build, cargo fmt, cargo check and git diff --check passed. No tests were added or run; native interactive acceptance and a real clock transition were not exercised. No installer or remote release was changed in this task.
+- API references consulted: https://docs.rs/rusqlite/latest/rusqlite/enum.TransactionBehavior.html and https://docs.rs/chrono/latest/chrono/trait.Datelike.html; compilation used the project's locked dependencies.
+
+### Weekly Todo interaction adjustment — 2026-11-25
+
+- Single-clicking a task title expands/collapses its detail area without repeating title/details field labels. Double-clicking edits the title in place; Enter/blur saves, Escape cancels, and F2 provides keyboard access.
+- Double-click cancels the pending single-click action/restores the prior expanded state. Title saves are guarded against duplicate Enter/blur requests and preserve any unsaved details draft. Details save separately.
+- Verification: pnpm lint, pnpm build and git diff --check passed. Native mouse/keyboard acceptance and automated tests were not run; no remote release was changed.
+
+### Weekly Todo automatic detail saving — 2026-11-25
+
+- Removed detail placeholders and Save/Cancel controls. Details save after a 600 ms pause, on blur, and when leaving the row; failed saves retain the draft with an error. Creation retains only its Add action; the plus button or Escape closes its input area.
+- Title, details and completion updates now use optional field patches. Writes are serialized so autosaving details cannot overwrite a concurrent title/completion change; background saves leave typing and completion controls available.
+- Verification: pnpm lint, pnpm build, cargo fmt, cargo check and git diff --check passed. Tests/native interactions were not run. No remote release was changed.

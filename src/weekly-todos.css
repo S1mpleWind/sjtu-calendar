@@ -1,0 +1,27 @@
+.weekly-todos-page { flex: 1; min-height: 0; padding-bottom: 20px; }
+.weekly-intro { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; color: #758278; font-size: 12px; margin: 9px 0 22px; }
+.weekly-intro p { margin: 0; }.weekly-intro > span { color: #929b94; font-size: 10px; }
+.weekly-card { border: 1px solid #e1e7df; border-radius: 12px; margin-bottom: 12px; background: #fff; overflow: hidden; }
+.weekly-card.is-current { border-color: #b7d0bd; }
+.weekly-card-header { display: flex; align-items: center; padding: 15px 18px; gap: 16px; }
+.weekly-week-toggle { display: flex; flex: 1; align-items: center; min-width: 0; gap: 14px; padding: 0; text-align: left; border: 0; background: transparent; color: #344a3a; }
+.weekly-chevron { color: #819385; font-size: 22px; width: 14px; }
+.weekly-week-label { display: flex; flex-direction: column; gap: 6px; }.weekly-week-label strong { font-size: 14px; font-weight: 600; }.weekly-week-label small { font-size: 10px; color: #8b978e; }
+.weekly-current-badge { color: #34785c; background: #eaf4ec; border-radius: 5px; padding: 4px 7px; font-size: 10px; }
+.weekly-plus { display: grid; place-items: center; flex-shrink: 0; height: 30px; width: 30px; padding: 0; background: #edf5ee; color: #34785c; border: 1px solid #dce8dc; border-radius: 7px; font-size: 19px; }.weekly-plus:hover { background: #e2efe4; }
+.weekly-card-body { border-top: 1px solid #edf0ea; padding: 0 22px 8px; }
+.weekly-todo-list { list-style: none; padding: 0; margin: 0; }.weekly-todo { border-bottom: 1px solid #edf0ea; padding: 15px 0; }.weekly-todo:last-child { border-bottom: 0; }
+.weekly-todo-line { display: flex; align-items: flex-start; gap: 12px; }.weekly-todo-line > input { flex-shrink: 0; accent-color: #34785c; margin: 3px 0 0; width: 15px; height: 15px; }
+.weekly-todo-toggle { display: flex; flex: 1; min-width: 0; justify-content: space-between; text-align: left; gap: 15px; padding: 0; border: 0; background: none; color: #344a3a; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.weekly-todo-toggle > span:last-child { color: #8f9e92; }.weekly-todo.is-complete .weekly-todo-toggle > span:first-child { color: #95a196; text-decoration: line-through; }
+.weekly-todo-line > .weekly-inline-title { flex: 1; min-width: 0; width: auto; height: auto; margin: -5px 0 0; padding: 5px 8px; border: 1px solid #b7d2bf; border-radius: 5px; color: #344a3a; background: #fcfdfb; font-size: 13px; }
+.weekly-item-message { margin: 9px 0 0 27px; color: #758278; font-size: 11px; }
+.weekly-carried { margin: 5px 0 0 27px; color: #8b998e; font-size: 10px; }
+.weekly-details-preview { margin: 8px 0 0 27px; color: #87928a; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weekly-editor { display: flex; flex-direction: column; gap: 13px; margin: 16px 0 0 27px; max-width: 760px; }.weekly-editor label { display: flex; flex-direction: column; gap: 7px; color: #738376; font-size: 11px; }
+.weekly-editor input, .weekly-editor textarea { width: 100%; border: 1px solid #dae3d8; border-radius: 7px; padding: 9px 11px; background: #fcfdfb; color: #344a3a; font-size: 12px; }.weekly-editor textarea { min-height: 40px; resize: none; overflow-y: hidden; line-height: 1.7; }
+.weekly-editor input:focus, .weekly-editor textarea:focus { outline: 2px solid #b7d2bf; outline-offset: 1px; }
+.weekly-editor-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }.weekly-editor-actions button { border: 0; border-radius: 6px; background: #34785c; color: #fff; padding: 7px 13px; font-size: 11px; }.weekly-editor-actions button.secondary { color: #758278; background: #eef2eb; }.weekly-editor-actions span { font-size: 10px; color: #7c8b80; }
+.weekly-add-form { padding: 16px; margin: 16px 0; border: 1px solid #e1e9df; border-radius: 9px; background: #f8fbf6; }.weekly-add-form summary { font-size: 11px; color: #738376; cursor: pointer; }.weekly-add-form details textarea { margin-top: 10px; }
+.weekly-form-error { font-size: 11px; color: #b04f4b; margin: 0; }.weekly-empty { font-size: 12px; color: #8f9b91; text-align: center; padding: 25px 0; }.weekly-history-hint { font-size: 10px; color: #8a978d; margin: 15px 0 4px; }
+@media (max-width: 1000px) { .weekly-card-header { padding: 13px; gap: 10px; }.weekly-week-label strong { font-size: 12px; }.weekly-card-body { padding: 0 14px 7px; } }

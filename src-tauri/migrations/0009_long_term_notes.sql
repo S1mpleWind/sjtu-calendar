@@ -1,0 +1,1 @@
+ALTER TABLE long_term_items ADD COLUMN note TEXT NOT NULL DEFAULT '';

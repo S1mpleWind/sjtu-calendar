@@ -73,6 +73,14 @@ describe("calendar widget", () => {
     expect(api.showMainWindow).toHaveBeenCalledOnce();
   });
 
+  it.each(["submitted", "graded", "pending_review"])("excludes %s work from pending deadlines even without a timestamp", async (workflowState) => {
+    api.getCanvasDeadlines.mockResolvedValue([{ ...deadline, workflowState }, { ...deadline, assignmentId: "pending", title: "Pending report", workflowState: "unsubmitted" }]);
+    render(<Widget />);
+    await waitFor(() => expect(api.getCanvasDeadlines).toHaveBeenCalled());
+    await screen.findByRole("button", { name: /Pending report/ });
+    expect(screen.queryByRole("button", { name: /实验报告/ })).not.toBeInTheDocument();
+  });
+
   it("reloads changed data and follows main-window timezone changes, then releases listeners", async () => {
     const handlers = new Map<string, (event: { payload: string }) => void>();
     const stops: Array<ReturnType<typeof vi.fn>> = [];
