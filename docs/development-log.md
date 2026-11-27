@@ -223,3 +223,9 @@
 - Removed detail placeholders and Save/Cancel controls. Details save after a 600 ms pause, on blur, and when leaving the row; failed saves retain the draft with an error. Creation retains only its Add action; the plus button or Escape closes its input area.
 - Title, details and completion updates now use optional field patches. Writes are serialized so autosaving details cannot overwrite a concurrent title/completion change; background saves leave typing and completion controls available.
 - Verification: pnpm lint, pnpm build, cargo fmt, cargo check and git diff --check passed. Tests/native interactions were not run. No remote release was changed.
+
+### Weekly Todo completed-item order and styling — 2026-11-27
+
+- Weekly queries now order completed items first, then retain creation order within completed/pending groups. Unchecking returns an item to its pending position. New pending tasks remain at the bottom; the add form is also placed below existing tasks.
+- Completed titles and both collapsed/expanded details use light gray. Checkboxes use a muted gray-green fill/checkmark, with a visible keyboard focus outline and native fallback under forced colors.
+- Verification: pnpm lint, pnpm build, cargo fmt, cargo check and git diff --check passed. Native visual review and tests were not run. No release or remote push was performed.

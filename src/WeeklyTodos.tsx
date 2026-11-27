@@ -175,8 +175,8 @@ export default function WeeklyTodos({ timezone }: { timezone: string }) {
         </button><button className="weekly-plus" type="button" aria-label={`${week.weekStart} 添加 Todo`} title="添加任务" disabled={working} onClick={() => { setExpanded((values) => ({ ...values, [week.weekStart]: true })); setAddingWeek((value) => value === week.weekStart ? null : week.weekStart); }}>＋</button></header>
         {open && <div className="weekly-card-body">
           {!current && <p className="weekly-history-hint">历史周的修改只影响该周，已延续的任务保持独立。</p>}
-          {addingWeek === week.weekStart && <AddTodo key={week.weekStart} working={working} onAdd={(title, details) => perform(() => createWeeklyTodo(timezone, week.weekStart, title, details))} onCancel={() => setAddingWeek(null)} />}
           {week.items.length ? <ul className="weekly-todo-list">{week.items.map((item) => <TodoRow key={item.id} item={item} working={working} onSave={(next, background) => perform(() => updateWeeklyTodo(timezone, next), background)} />)}</ul> : addingWeek !== week.weekStart && <p className="weekly-empty">这周还没有任务，点击右上角 ＋ 添加。</p>}
+          {addingWeek === week.weekStart && <AddTodo key={week.weekStart} working={working} onAdd={(title, details) => perform(() => createWeeklyTodo(timezone, week.weekStart, title, details))} onCancel={() => setAddingWeek(null)} />}
         </div>}
       </section>;
     })}

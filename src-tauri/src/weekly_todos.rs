@@ -111,7 +111,7 @@ pub fn list(path: &Path, timezone: &str) -> Result<WeeklyTodoList, String> {
     drop(weeks_query);
     let mut weeks = Vec::new();
     for week_start in week_keys {
-        let mut query = transaction.prepare("SELECT id,title,details,completed,carried_from_week FROM weekly_todos WHERE week_start=?1 ORDER BY created_at,id").map_err(db_error)?;
+        let mut query = transaction.prepare("SELECT id,title,details,completed,carried_from_week FROM weekly_todos WHERE week_start=?1 ORDER BY completed DESC,created_at,id").map_err(db_error)?;
         let items = query
             .query_map([&week_start], |row| {
                 Ok(WeeklyTodo {

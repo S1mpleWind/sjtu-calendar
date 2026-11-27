@@ -11,9 +11,13 @@
 .weekly-plus { display: grid; place-items: center; flex-shrink: 0; height: 30px; width: 30px; padding: 0; background: #edf5ee; color: #34785c; border: 1px solid #dce8dc; border-radius: 7px; font-size: 19px; }.weekly-plus:hover { background: #e2efe4; }
 .weekly-card-body { border-top: 1px solid #edf0ea; padding: 0 22px 8px; }
 .weekly-todo-list { list-style: none; padding: 0; margin: 0; }.weekly-todo { border-bottom: 1px solid #edf0ea; padding: 15px 0; }.weekly-todo:last-child { border-bottom: 0; }
-.weekly-todo-line { display: flex; align-items: flex-start; gap: 12px; }.weekly-todo-line > input { flex-shrink: 0; accent-color: #34785c; margin: 3px 0 0; width: 15px; height: 15px; }
+.weekly-todo-line { display: flex; align-items: flex-start; gap: 12px; }.weekly-todo-line > input { flex-shrink: 0; margin: 3px 0 0; width: 15px; height: 15px; }
+.weekly-todo-line > input[type="checkbox"] { appearance: none; display: grid; place-content: center; border: 1px solid #c7d1c8; border-radius: 4px; background: #fbfcfa; cursor: pointer; }
+.weekly-todo-line > input[type="checkbox"]:checked { border-color: #c1d0c4; background: #d9e3da; }
+.weekly-todo-line > input[type="checkbox"]:checked::after { content: ""; width: 4px; height: 7px; margin-top: -2px; border: solid #8a9b8d; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+.weekly-todo-line > input[type="checkbox"]:focus-visible { outline: 2px solid #b2c4b7; outline-offset: 3px; }
 .weekly-todo-toggle { display: flex; flex: 1; min-width: 0; justify-content: space-between; text-align: left; gap: 15px; padding: 0; border: 0; background: none; color: #344a3a; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
-.weekly-todo-toggle > span:last-child { color: #8f9e92; }.weekly-todo.is-complete .weekly-todo-toggle > span:first-child { color: #95a196; text-decoration: line-through; }
+.weekly-todo-toggle > span:last-child { color: #8f9e92; }.weekly-todo.is-complete .weekly-todo-toggle > span:first-child { color: #a4aba6; text-decoration: line-through; }
 .weekly-todo-line > .weekly-inline-title { flex: 1; min-width: 0; width: auto; height: auto; margin: -5px 0 0; padding: 5px 8px; border: 1px solid #b7d2bf; border-radius: 5px; color: #344a3a; background: #fcfdfb; font-size: 13px; }
 .weekly-item-message { margin: 9px 0 0 27px; color: #758278; font-size: 11px; }
 .weekly-carried { margin: 5px 0 0 27px; color: #8b998e; font-size: 10px; }
@@ -21,6 +25,9 @@
 .weekly-editor { display: flex; flex-direction: column; gap: 13px; margin: 16px 0 0 27px; max-width: 760px; }.weekly-editor label { display: flex; flex-direction: column; gap: 7px; color: #738376; font-size: 11px; }
 .weekly-editor input, .weekly-editor textarea { width: 100%; border: 1px solid #dae3d8; border-radius: 7px; padding: 9px 11px; background: #fcfdfb; color: #344a3a; font-size: 12px; }.weekly-editor textarea { min-height: 40px; resize: none; overflow-y: hidden; line-height: 1.7; }
 .weekly-editor input:focus, .weekly-editor textarea:focus { outline: 2px solid #b7d2bf; outline-offset: 1px; }
+.weekly-todo.is-complete .weekly-todo-toggle > span:last-child, .weekly-todo.is-complete .weekly-details-preview, .weekly-todo.is-complete .weekly-carried { color: #abb1ad; }
+.weekly-todo.is-complete .weekly-editor textarea, .weekly-todo.is-complete .weekly-inline-title { color: #a4aba6; background: #fafbf9; border-color: #e4e8e2; }
+@media (forced-colors: active) { .weekly-todo-line > input[type="checkbox"] { appearance: auto; }.weekly-todo-line > input[type="checkbox"]::after { content: none; } }
 .weekly-editor-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }.weekly-editor-actions button { border: 0; border-radius: 6px; background: #34785c; color: #fff; padding: 7px 13px; font-size: 11px; }.weekly-editor-actions button.secondary { color: #758278; background: #eef2eb; }.weekly-editor-actions span { font-size: 10px; color: #7c8b80; }
 .weekly-add-form { padding: 16px; margin: 16px 0; border: 1px solid #e1e9df; border-radius: 9px; background: #f8fbf6; }.weekly-add-form summary { font-size: 11px; color: #738376; cursor: pointer; }.weekly-add-form details textarea { margin-top: 10px; }
 .weekly-form-error { font-size: 11px; color: #b04f4b; margin: 0; }.weekly-empty { font-size: 12px; color: #8f9b91; text-align: center; padding: 25px 0; }.weekly-history-hint { font-size: 10px; color: #8a978d; margin: 15px 0 4px; }
